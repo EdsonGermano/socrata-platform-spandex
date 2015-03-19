@@ -12,6 +12,8 @@ class DatasetModel
     #Add two alpha numeric characters to match the length                                                                                                            
     @domain = domain
     @uid = uid
+    #Used to get the string in the right place
+    @dataset_uid = dataset_uid = (0...2).map { ('a'..'z').to_a[rand(26)] }.join + @uid
     @columns = generate_fake_column_uids(column_count.to_i)
     @generators = get_datagenerators
     @working_copy = 1
@@ -77,9 +79,9 @@ class DatasetModel
 
   def get_sample(col_index)
     value = @generators[col_index].get_sample
-    dataset_uid = (0...2).map { ('a'..'z').to_a[rand(26)] }.join + @uid
+    #dataset_uid = (0...2).map { ('a'..'z').to_a[rand(26)] }.join + @uid
     column_uid = @columns[col_index]
-    sample = Sample.new(dataset_uid,@working_copy,column_uid,value)
+    sample = Sample.new(@dataset_uid,@working_copy,column_uid,value)
     sample
   end
 
@@ -97,6 +99,10 @@ class Sample
     "#{@dataset_uid}|#{@working_copy}|#{@column_uid}"
   end
 
+  def get_id
+    get_composite_id + "|" + @value
+  end
+  
   def get_document
     document = { :dataset_id => @dataset_uid, :copy_id => @working_copy, :column_id => @column_uid, :composite_id => get_composite_id, :value => @value }
     document

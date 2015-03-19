@@ -3,7 +3,7 @@ require 'elasticsearch/api'
 require 'elasticsearch'
 
 class ElasticWriter
-  $index_name = 'spandex2'
+  $index_name = 'spandex3'
   $host = '10.110.95.178:9200'
   $current_byte_size = 0
   $bulk_update_threshold = 15728640
@@ -43,15 +43,16 @@ class ElasticWriter
   def bulk_write(sample)
     document = sample.get_document
     $current_byte_size = $current_byte_size + document.to_s.bytesize
-    update =  { index:  { _index: $index_name, _type: 'field_value', _id: sample.get_composite_id, data: document } }
+    update =  { index:  { _index: $index_name, _type: 'field_value', _id: sample.get_id, data: document } }
     @documents.push update
 
     #puts $current_byte_size                                                                                                                                         
     if $current_byte_size > $bulk_update_threshold
-      file = File.open("/home/ubuntu/spike/writeoutput.csv","w")
+      file = File.open("/home/ubuntu/spike/writeoutput.csv","a")
       # puts "Writing " + @documents.length.to_s + " documents"                                                                                                      
       result = @client.bulk body: @documents
-      #puts "Wrote: " + @documents.length.to_s + "in " + result["took"].to_s + "s.  Errors? " + result["errors"].to_s                                                
+      # puts result.to_s[0,250]
+#      puts "Wrote: " + @documents.length.to_s + "in " + result["took"].to_s + "s.  Errors? " + result["errors"].to_s                                                
       file.puts @documents.length.to_s + "," + result["took"].to_s + "," + result["errors"].to_s
       @documents.clear
       $current_byte_size = 0
@@ -61,7 +62,7 @@ class ElasticWriter
   def write_single_row(sample) #document)                                                                                                                            
     document = sample.get_document
     puts body
-    response = @client.index index: $index_name, type: "field_value", _id: sample.get_composite_id, body: document
+    response = @client.index index: $index_name, type: "field_value", _id: sample.get_id, body: document
     puts response
   end
 
