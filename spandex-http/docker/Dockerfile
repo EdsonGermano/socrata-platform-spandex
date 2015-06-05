@@ -1,8 +1,9 @@
 FROM socrata/java
 
 # Service specific settings.
-ENV SPANDEX_SECONDARY_ES_PORT 9300
 ENV SPANDEX_SECONDARY_ES_CLUSTER_NAME spandex
+ENV SPANDEX_SECONDARY_ES_INDEX spandex-r
+ENV SPANDEX_SECONDARY_ES_PORT 9300
 ENV SERVER_NAME spandex-http
 
 # Some paths/locations we care about.
