@@ -22,6 +22,8 @@ import org.elasticsearch.search.sort.SortOrder
 import org.elasticsearch.search.suggest.Suggest
 import org.elasticsearch.search.suggest.completion.CompletionSuggestionFuzzyBuilder
 
+import scala.collection.JavaConversions._
+
 // scalastyle:off number.of.methods
 case class ElasticSearchResponseFailed(msg: String) extends Exception(msg)
 
@@ -64,7 +66,7 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
     // No op - we don't care to throw an exception if d.isFound is false,
     // since that means the document is effectively deleted.
     case dbq: DeleteByQueryResponse =>
-      val failures = dbq.getIndex(config.index).getFailures
+      val failures = dbq.getIndices.flatMap(_._2.getFailures)
       if (failures.nonEmpty) {
         throw ElasticSearchResponseFailed(s"DeleteByQuery response contained failures: " +
           failures.map(_.reason).mkString(","))
