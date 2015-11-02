@@ -9,5 +9,6 @@ object SpandexFields {
   val RowId        = "row_id"
   val Value        = "value"
   val ValueKeyword = "value_keyword"
+  val ValueRaw     = "value_raw"
   val Stage        = "stage"
 }

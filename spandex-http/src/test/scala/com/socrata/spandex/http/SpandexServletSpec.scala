@@ -170,27 +170,6 @@ class SpandexServletSpec extends ScalatraSuite with FunSuiteLike with TestESData
     }
   }
 
-  ignore("sample") {
-    get(s"$routeSample/$dsid/$copynum/$colid") {
-      contentTypeShouldBe(ContentTypeJson)
-      status should equal(HttpStatus.SC_OK)
-      body should include(optionsJson)
-      body should include(makeRowData(colsysid, 2))
-    }
-  }
-
-  ignore("sample without required params should return 404") {
-    get(s"$routeSample/$dsid/$copynum") {
-      status should equal(HttpStatus.SC_NOT_FOUND)
-    }
-    get(s"$routeSample/$dsid") {
-      status should equal(HttpStatus.SC_NOT_FOUND)
-    }
-    get(s"$routeSample") {
-      status should equal(HttpStatus.SC_NOT_FOUND)
-    }
-  }
-
   test("suggest - copy stage invalid should return 400") {
     val donut = "donut"
     get(s"$routeSuggest/$dsid/$donut/$colid/$textPrefix") {

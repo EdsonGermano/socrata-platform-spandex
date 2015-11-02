@@ -10,7 +10,7 @@ import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsReques
 import org.elasticsearch.action.bulk.BulkResponse
 import org.elasticsearch.action.delete.{DeleteRequestBuilder, DeleteResponse}
 import org.elasticsearch.action.index.{IndexRequestBuilder, IndexResponse}
-import org.elasticsearch.action.search.SearchType
+import org.elasticsearch.action.search.{SearchRequestBuilder, SearchType}
 import org.elasticsearch.action.update.{UpdateRequestBuilder, UpdateResponse}
 import org.elasticsearch.common.unit.{Fuzziness, TimeValue}
 import org.elasticsearch.index.query.FilterBuilders._
@@ -296,34 +296,41 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
       .minimumShouldMatch("50%"),
       byColumnIdFilter(column.datasetId, column.copyNumber, column.systemColumnId))
 
-    val response = client.prepareSearch(config.index)
+    val search = client.prepareSearch(config.index)
       .setTypes(config.fieldValueMapping.mappingType)
       .setQuery(suggestionQuery)
       .setSize(size)
-      .execute().actionGet()
+
+    logElasticsearchRequest(search)
+    val response = search.execute().actionGet()
 
     response.results[FieldValue]
   }
 
-  /* Not yet used.
-   * This grabs the TOP N documents by frequency.
-   */
   def sample(column: ColumnMap, size: Int): SearchResults[FieldValue] = {
     val aggName = "values"
-    val response = client.prepareSearch(config.index)
+    val sampleQuery = filteredQuery(
+      matchAllQuery(),
+      byColumnIdFilter(column.datasetId, column.copyNumber, column.systemColumnId))
+    val search = client.prepareSearch(config.index)
       .setTypes(config.fieldValueMapping.mappingType)
-      .setQuery(filteredQuery(
-        matchAllQuery(),
-        byColumnIdFilter(column.datasetId, column.copyNumber, column.systemColumnId)))
+      .setQuery(sampleQuery)
       .setSearchType(SearchType.COUNT)
       .addAggregation(
         terms(aggName)
-          .field(SpandexFields.Value)
+          .field(SpandexFields.ValueRaw)
           .size(size).shardSize(size * 2)
           .order(Terms.Order.count(false)) // descending <- ascending=false
       )
       .setSize(size)
-      .execute.actionGet
+
+    logElasticsearchRequest(search)
+    val response = search.execute.actionGet
+
     response.results[FieldValue](aggName)
+  }
+
+  private def logElasticsearchRequest(request: SearchRequestBuilder): Unit = {
+    logger.info(s"executing elasticsearch request ${request.toString.replaceAll("""[\n\s]+""", " ")}")
   }
 }

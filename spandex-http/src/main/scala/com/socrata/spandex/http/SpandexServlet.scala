@@ -56,19 +56,6 @@ class SpandexServlet(conf: SpandexConfig,
     }.call()
   }
 
-  /* How to get all the results out of Lucene FST.
-   * Ignore the provided text and fuzziness parameters and replace as follows.
-   * Text "1 character" => blank string is not allowed, but through the fuzziness below
-   *                       this 1 character will be factored out.
-   * Fuzziness ONE => approximately allows 1 edit distance from the given to result texts.
-   * Fuzz Length 0 => start giving fuzzy results from any length of input text.
-   * Fuzz Prefix 0 => allow all results no matter how badly matched.
-   * TA-DA!
-   */
-  private[this] val sampleText = "a"
-  private[this] val sampleFuzz = Fuzziness.ONE
-  private[this] val sampleFuzzLen = 0
-  private[this] val sampleFuzzPre = 0
   get(s"/$routeSuggest/:$paramDatasetId/:$paramStageInfo/:$paramUserColumnId") {
     timer("suggestSample") {
       params.get(paramText) match {
@@ -115,15 +102,6 @@ class SpandexServlet(conf: SpandexConfig,
     val result = f(column, text, fuzz, size)
     logger.info(s"<<< $result")
     JsonUtil.renderJson(result)
-  }
-
-  /* Not yet used.
-   * sample endpoint exposes query by column with aggregation on doc count
-   */
-  get(s"/sample/:$paramDatasetId/:$paramStageInfo/:$paramUserColumnId") {
-    timer("sample") {
-      suggest { (col, _, _, size) => SpandexResult(client.sample(col, size)) }
-    }.call()
   }
 
 }

@@ -247,7 +247,7 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike with Matchers with Bef
     client.datasetCopy(datasets(0), 2) should not be ('defined)
   }
 
-  ignore("samples") {
+  test("samples") {
     val column = ColumnMap(datasets(0), 1, 1, "col1-1111")
 
     val samples = client.sample(column, 10)
@@ -260,7 +260,7 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike with Matchers with Bef
     samples.aggs should contain(BucketCount(makeRowData(1, 5), 1))
   }
 
-  ignore("lots of samples") {
+  test("lots of samples") {
     val ds = datasets(0)
     val cp = copies(ds)(1)
     val col = ColumnMap(ds, cp.copyNumber, 42L, "col42")
@@ -279,7 +279,7 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike with Matchers with Bef
     retrieved.aggs.sortBy(_.key) should be(expected)
   }
 
-  ignore("sort by frequency") {
+  test("sort by frequency") {
     val ds = datasets(0)
     val cp = copies(ds)(1)
     val col = ColumnMap(ds, cp.copyNumber, 47L, "col47")

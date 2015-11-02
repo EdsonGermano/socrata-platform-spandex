@@ -29,14 +29,16 @@ object SpandexResult {
     })
   }
 
-  /* Not yet used.
-   * Transforms a search result with aggregation into spandex result options
-   */
-  def apply(response: SearchResults[FieldValue]): SpandexResult =
-    SpandexResult(response.thisPage.map { src =>
+  def apply(response: SearchResults[FieldValue]): SpandexResult = {
+    val hits = response.thisPage.map { src =>
       // TODO: aggregate with doc count
-      SpandexOption(src.value, Some(42))
-    })
+      SpandexOption(src.value, None)
+    }
+    val buckets = response.aggs.map { bc =>
+      SpandexOption(bc.key, Some(bc.docCount))
+    }
+    SpandexResult(hits ++ buckets)
+  }
 
   object Fields {
     private[this] def formatQuotedString(s: String) = "\"%s\"" format s
