@@ -109,9 +109,9 @@ class SpandexServletSpec extends ScalatraSuite with FunSuiteLike with TestESData
     }
     get(s"$routeSuggest/$dsid/$copynum/$colid/$text", (paramSize, "1")) {
       status should equal(HttpStatus.SC_OK)
-      body should include(makeRowData(colsysid, 1))
+      body shouldNot include(makeRowData(colsysid, 1))
       body shouldNot include(makeRowData(colsysid, 2))
-      body shouldNot include(makeRowData(colsysid, 3))
+      body should include(makeRowData(colsysid, 3))
       body shouldNot include(makeRowData(colsysid, 4))
       body shouldNot include(makeRowData(colsysid, 5))
     }

@@ -56,7 +56,7 @@ class SpandexServlet(conf: SpandexConfig,
     }.call()
   }
 
-  /* How to get all the results out of Lucene.
+  /* How to get all the results out of Lucene FST.
    * Ignore the provided text and fuzziness parameters and replace as follows.
    * Text "1 character" => blank string is not allowed, but through the fuzziness below
    *                       this 1 character will be factored out.
@@ -73,7 +73,7 @@ class SpandexServlet(conf: SpandexConfig,
     timer("suggestSample") {
       params.get(paramText) match {
         case None => suggest { (col, _, _, size) =>
-          SpandexResult(client.suggest(col, size, sampleText, sampleFuzz, sampleFuzzLen, sampleFuzzPre))
+          SpandexResult(client.sample(col, size))
         }
         case Some(s) => suggest { (col, text, fuzz, size) =>
           SpandexResult(client.suggest(col, size, text, fuzz, conf.suggestFuzzLength, conf.suggestFuzzPrefix))
@@ -104,7 +104,7 @@ class SpandexServlet(conf: SpandexConfig,
     logger.info(s"urlDecoded param text -> $text")
 
     val fuzz = Fuzziness.build(params.getOrElse(paramFuzz, conf.suggestFuzziness))
-    val size = params.get(paramSize).headOption.fold(conf.suggestSize)(_.toInt)
+    val size = params.get(paramSize).fold(conf.suggestSize)(_.toInt)
 
     val copy = copyNum(datasetId, stageInfoText)
     logger.info(s"found copy $copy")

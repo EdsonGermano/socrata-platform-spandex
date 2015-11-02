@@ -15,7 +15,7 @@ import org.elasticsearch.action.update.{UpdateRequestBuilder, UpdateResponse}
 import org.elasticsearch.common.unit.{Fuzziness, TimeValue}
 import org.elasticsearch.index.query.FilterBuilders._
 import org.elasticsearch.index.query.QueryBuilders._
-import org.elasticsearch.index.query.{FilterBuilder, QueryBuilder}
+import org.elasticsearch.index.query.{FilterBuilder, MatchQueryBuilder, QueryBuilder}
 import org.elasticsearch.search.aggregations.AggregationBuilders._
 import org.elasticsearch.search.aggregations.bucket.terms.Terms
 import org.elasticsearch.search.sort.SortOrder
@@ -49,8 +49,6 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
     boolFilter().must(termFilter(SpandexFields.DatasetId, datasetId))
                 .must(termFilter(SpandexFields.CopyNumber, copyNumber))
                 .must(termFilter(SpandexFields.ColumnId, columnId))
-  protected def byColumnCompositeId(column: ColumnMap): QueryBuilder =
-    boolQuery().must(termQuery(SpandexFields.CompositeId, column.compositeId))
   protected def byRowIdQuery(datasetId: String, copyNumber: Long, rowId: Long): QueryBuilder =
     boolQuery().must(termQuery(SpandexFields.DatasetId, datasetId))
                .must(termQuery(SpandexFields.CopyNumber, copyNumber))
@@ -285,12 +283,23 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
   def suggest(column: ColumnMap, size: Int, text: String,
               fuzz: Fuzziness, fuzzLength: Int, fuzzPrefix: Int): SearchResults[FieldValue] = {
     val suggestionQuery = filteredQuery(
-      matchQuery(SpandexFields.Value, text),
+      boolQuery()
+        .must(matchQuery(SpandexFields.Value, text)
+          .operator(MatchQueryBuilder.Operator.OR)
+          .fuzziness(fuzz)
+          .prefixLength(fuzzPrefix))
+        .should(matchQuery(SpandexFields.Value, text)
+          .operator(MatchQueryBuilder.Operator.AND)
+          .fuzziness(fuzz)
+          .prefixLength(fuzzPrefix))
+        .should(matchQuery(SpandexFields.ValueKeyword, text))
+      .minimumShouldMatch("50%"),
       byColumnIdFilter(column.datasetId, column.copyNumber, column.systemColumnId))
 
     val response = client.prepareSearch(config.index)
       .setTypes(config.fieldValueMapping.mappingType)
       .setQuery(suggestionQuery)
+      .setSize(size)
       .execute().actionGet()
 
     response.results[FieldValue]
@@ -303,11 +312,13 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
     val aggName = "values"
     val response = client.prepareSearch(config.index)
       .setTypes(config.fieldValueMapping.mappingType)
-      .setQuery(byColumnCompositeId(column))
+      .setQuery(filteredQuery(
+        matchAllQuery(),
+        byColumnIdFilter(column.datasetId, column.copyNumber, column.systemColumnId)))
       .setSearchType(SearchType.COUNT)
       .addAggregation(
         terms(aggName)
-          .field(SpandexFields.RawValue)
+          .field(SpandexFields.Value)
           .size(size).shardSize(size * 2)
           .order(Terms.Order.count(false)) // descending <- ascending=false
       )

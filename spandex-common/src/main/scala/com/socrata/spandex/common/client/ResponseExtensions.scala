@@ -2,11 +2,10 @@ package com.socrata.spandex.common.client
 
 import com.rojoma.json.v3.ast.{JString, JValue}
 import com.rojoma.json.v3.codec.{DecodeError, JsonDecode, JsonEncode}
-import com.rojoma.json.v3.util.{AutomaticJsonCodecBuilder, JsonKeyStrategy, JsonUtil, SimpleJsonCodecBuilder, Strategy}
+import com.rojoma.json.v3.util.{AutomaticJsonCodecBuilder, JsonKeyStrategy, JsonUtil, Strategy}
 import com.socrata.datacoordinator.id.{ColumnId, RowId}
 import com.socrata.datacoordinator.secondary.{ColumnInfo, LifecycleStage}
 import com.socrata.soql.types.SoQLText
-import com.socrata.spandex.common.CompletionAnalyzer
 import org.elasticsearch.action.get.GetResponse
 import org.elasticsearch.action.search.SearchResponse
 import org.elasticsearch.search.SearchHit
@@ -46,7 +45,6 @@ case class ColumnMap(datasetId: String,
                      systemColumnId: Long,
                      userColumnId: String) {
   lazy val docId = ColumnMap.makeDocId(datasetId, copyNumber, userColumnId)
-  lazy val compositeId = ColumnMap.makeCompositeId(datasetId, copyNumber, systemColumnId)
 }
 object ColumnMap {
   implicit val jCodec = AutomaticJsonCodecBuilder[ColumnMap]
@@ -63,22 +61,6 @@ object ColumnMap {
                 copyNumber: Long,
                 userColumnId: String): String =
     s"$datasetId|$copyNumber|$userColumnId"
-
-  def makeCompositeId(datasetId: String, copyNumber: Long, systemColumnId: Long): String =
-    s"$datasetId|$copyNumber|$systemColumnId"
-}
-
-@JsonKeyStrategy(Strategy.Underscore)
-case class CompletionValue(output: String) {
-  lazy val inputTokens = CompletionAnalyzer.analyze(output)
-
-  def this(inputTokens: List[String], output: String) = this(output)
-}
-object CompletionValue {
-  implicit val jCodec = SimpleJsonCodecBuilder[CompletionValue].build(
-    SpandexFields.ValueInput, _.inputTokens,
-    SpandexFields.ValueOutput, _.output
-  )
 }
 
 @JsonKeyStrategy(Strategy.Underscore)
@@ -97,9 +79,6 @@ object FieldValue {
 
   def makeDocId(datasetId: String, copyNumber: Long, columnId: Long, rowId: Long): String =
     s"$datasetId|$copyNumber|$columnId|$rowId"
-
-  def makeCompositeId(datasetId: String, copyNumber: Long, columnId: Long): String =
-    s"$datasetId|$copyNumber|$columnId"
 }
 
 @JsonKeyStrategy(Strategy.Underscore)

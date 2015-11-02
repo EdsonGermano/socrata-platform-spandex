@@ -33,8 +33,9 @@ object SpandexResult {
    * Transforms a search result with aggregation into spandex result options
    */
   def apply(response: SearchResults[FieldValue]): SpandexResult =
-    SpandexResult(response.aggs.map { src =>
-      SpandexOption(src.key, Some(src.docCount))
+    SpandexResult(response.thisPage.map { src =>
+      // TODO: aggregate with doc count
+      SpandexOption(src.value, Some(42))
     })
 
   object Fields {
