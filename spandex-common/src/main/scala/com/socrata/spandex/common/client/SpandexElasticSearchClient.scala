@@ -13,8 +13,9 @@ import org.elasticsearch.action.index.{IndexRequestBuilder, IndexResponse}
 import org.elasticsearch.action.search.SearchType
 import org.elasticsearch.action.update.{UpdateRequestBuilder, UpdateResponse}
 import org.elasticsearch.common.unit.{Fuzziness, TimeValue}
-import org.elasticsearch.index.query.QueryBuilder
+import org.elasticsearch.index.query.FilterBuilders._
 import org.elasticsearch.index.query.QueryBuilders._
+import org.elasticsearch.index.query.{FilterBuilder, QueryBuilder}
 import org.elasticsearch.search.aggregations.AggregationBuilders._
 import org.elasticsearch.search.aggregations.bucket.terms.Terms
 import org.elasticsearch.search.sort.SortOrder
@@ -46,6 +47,10 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
     boolQuery().must(termQuery(SpandexFields.DatasetId, datasetId))
                .must(termQuery(SpandexFields.CopyNumber, copyNumber))
                .must(termQuery(SpandexFields.ColumnId, columnId))
+  protected def byColumnIdFilter(datasetId: String, copyNumber: Long, columnId: Long): FilterBuilder =
+    boolFilter().must(termFilter(SpandexFields.DatasetId, datasetId))
+                .must(termFilter(SpandexFields.CopyNumber, copyNumber))
+                .must(termFilter(SpandexFields.ColumnId, columnId))
   protected def byColumnCompositeId(column: ColumnMap): QueryBuilder =
     boolQuery().must(termQuery(SpandexFields.CompositeId, column.compositeId))
   protected def byRowIdQuery(datasetId: String, copyNumber: Long, rowId: Long): QueryBuilder =
@@ -280,19 +285,17 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
     deleteByQuery(byDatasetIdQuery(datasetId), Seq(config.datasetCopyMapping.mappingType))
 
   def suggest(column: ColumnMap, size: Int, text: String,
-              fuzz: Fuzziness, fuzzLength: Int, fuzzPrefix: Int): Suggest = {
-    val suggestion = new CompletionSuggestionFuzzyBuilder("suggest")
-      .addContextField(SpandexFields.CompositeId, column.compositeId)
-      .setFuzziness(fuzz).setFuzzyPrefixLength(fuzzPrefix).setFuzzyMinLength(fuzzLength)
-      .field(SpandexFields.Value)
-      .text(text)
-      .size(size)
+              fuzz: Fuzziness, fuzzLength: Int, fuzzPrefix: Int): SearchResults[FieldValue] = {
+    val suggestionQuery = filteredQuery(
+      matchQuery(SpandexFields.Value, text),
+      byColumnIdFilter(column.datasetId, column.copyNumber, column.systemColumnId))
 
-    val response = client.prepareSuggest(config.index)
-      .addSuggestion(suggestion)
+    val response = client.prepareSearch(config.index)
+      .setTypes(config.fieldValueMapping.mappingType)
+      .setQuery(suggestionQuery)
       .execute().actionGet()
 
-    response.getSuggest
+    response.results[FieldValue]
   }
 
   /* Not yet used.

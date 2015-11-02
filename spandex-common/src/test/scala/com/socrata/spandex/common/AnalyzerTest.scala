@@ -50,15 +50,14 @@ trait AnalyzerTest {
   protected def index(value: String): Unit =
     index(FieldValue(col.datasetId, col.copyNumber, col.systemColumnId, docId, value))
   protected def index(fv: FieldValue): Unit = {
+    println(s"indexing $fv")
     client.indexFieldValue(fv, refresh = true)
     docId += 1
   }
 
-  protected def suggest(query: String, fuzz: Fuzziness = Fuzziness.ZERO): mutable.Buffer[String] = {
+  protected def suggest(query: String, fuzz: Fuzziness = Fuzziness.ZERO): Seq[String] = {
     val response = client.suggest(col, 10, query, fuzz, 2, 1)
-    val suggest = response.getSuggestion[Suggestion[Entry]]("suggest")
-    val entries = suggest.getEntries
-    val options = entries.get(0).getOptions
-    options.asScala.map(_.getText.toString)
+    println(s"response $response")
+    response.thisPage.map(_.value.toString)
   }
 }

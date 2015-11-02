@@ -88,26 +88,9 @@ case class FieldValue(datasetId: String,
                       rowId: Long,
                       value: String) {
   lazy val docId = FieldValue.makeDocId(datasetId, copyNumber, columnId, rowId)
-  lazy val compositeId = FieldValue.makeCompositeId(datasetId, copyNumber, columnId)
-  lazy val completionValue = CompletionValue(value)
-
-  // Needed for codec builder
-  def this(datasetId: String,
-           copyNumber: Long,
-           columnId: Long,
-           compositeId: String,
-           rowId: Long,
-           value: CompletionValue) = this(datasetId, copyNumber, columnId, rowId, value.output)
 }
 object FieldValue {
-  implicit val jCodec = SimpleJsonCodecBuilder[FieldValue].build(
-    SpandexFields.DatasetId, _.datasetId,
-    SpandexFields.CopyNumber, _.copyNumber,
-    SpandexFields.ColumnId, _.columnId,
-    SpandexFields.CompositeId, _.compositeId,
-    SpandexFields.RowId, _.rowId,
-    SpandexFields.Value, _.completionValue
-  )
+  implicit val jCodec = AutomaticJsonCodecBuilder[FieldValue]
 
   def apply(datasetName: String, copyNumber: Long, columnId: ColumnId, rowId: RowId, data: SoQLText): FieldValue =
     this(datasetName, copyNumber, columnId.underlying, rowId.underlying, data.value)

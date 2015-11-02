@@ -194,6 +194,7 @@ class CompletionAnalyzerSpec extends FunSuiteLike with Matchers with AnalyzerTes
     val search = "h/arthur"
 
     val tokens = CompletionAnalyzer.analyze(value)
+    println(tokens)
     tokens should contain(expectedValue)
 
     index(value)
