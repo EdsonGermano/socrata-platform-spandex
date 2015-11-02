@@ -50,14 +50,12 @@ trait AnalyzerTest {
   protected def index(value: String): Unit =
     index(FieldValue(col.datasetId, col.copyNumber, col.systemColumnId, docId, value))
   protected def index(fv: FieldValue): Unit = {
-    println(s"indexing $fv")
     client.indexFieldValue(fv, refresh = true)
     docId += 1
   }
 
   protected def suggest(query: String, fuzz: Fuzziness = Fuzziness.ZERO): Seq[String] = {
     val response = client.suggest(col, 10, query, fuzz, 2, 1)
-    println(s"response $response")
     response.thisPage.map(_.value.toString)
   }
 }

@@ -19,8 +19,6 @@ import org.elasticsearch.index.query.{FilterBuilder, QueryBuilder}
 import org.elasticsearch.search.aggregations.AggregationBuilders._
 import org.elasticsearch.search.aggregations.bucket.terms.Terms
 import org.elasticsearch.search.sort.SortOrder
-import org.elasticsearch.search.suggest.Suggest
-import org.elasticsearch.search.suggest.completion.CompletionSuggestionFuzzyBuilder
 
 // scalastyle:off number.of.methods
 case class ElasticSearchResponseFailed(msg: String) extends Exception(msg)
