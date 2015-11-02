@@ -20,7 +20,6 @@ import org.elasticsearch.search.aggregations.AggregationBuilders._
 import org.elasticsearch.search.aggregations.bucket.terms.Terms
 import org.elasticsearch.search.sort.SortOrder
 
-// scalastyle:off number.of.methods
 case class ElasticSearchResponseFailed(msg: String) extends Exception(msg)
 
 // Setting refresh to true on ES write calls, because we always want to be
@@ -33,6 +32,7 @@ case class ElasticSearchResponseFailed(msg: String) extends Exception(msg)
 // - refresh=true only guarantees consistency on a single shard.
 // - We aren't actually sure what the perf implications of running like this at production scale are.
 // http://www.elastic.co/guide/en/elasticsearch/reference/1.x/docs-index_.html#index-refresh
+// scalastyle:ignore number.of.methods
 class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSearchClient(config) with Logging {
   protected def byDatasetIdQuery(datasetId: String): QueryBuilder = termQuery(SpandexFields.DatasetId, datasetId)
   protected def byDatasetIdAndStageQuery(datasetId: String, stage: LifecycleStage): QueryBuilder =

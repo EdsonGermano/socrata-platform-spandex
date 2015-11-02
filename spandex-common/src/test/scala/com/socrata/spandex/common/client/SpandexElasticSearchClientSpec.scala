@@ -7,7 +7,6 @@ import org.elasticsearch.action.index.IndexRequestBuilder
 import org.elasticsearch.index.engine.IndexFailedEngineException
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FunSuiteLike, Matchers}
 
-// scalastyle:off
 class SpandexElasticSearchClientSpec extends FunSuiteLike with Matchers with BeforeAndAfterAll with BeforeAndAfterEach with TestESData {
   val config = new SpandexConfig
   val client = new TestESClient(config.es)

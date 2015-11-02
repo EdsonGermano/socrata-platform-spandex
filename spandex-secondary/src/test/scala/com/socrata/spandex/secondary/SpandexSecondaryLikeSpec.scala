@@ -20,12 +20,11 @@ class TestSpandexSecondary(config: ElasticSearchConfig) extends SpandexSecondary
   def shutdown(): Unit = client.close()
 }
 
-// scalastyle:off
 class SpandexSecondaryLikeSpec extends FunSuiteLike with Matchers with TestESData with BeforeAndAfterEach with BeforeAndAfterAll {
   lazy val config = new SpandexConfig
   lazy val secondary = new TestSpandexSecondary(config.es)
 
-  def client = secondary.client
+  def client: TestESClient = secondary.client
 
   override protected def beforeAll(): Unit = SpandexBootstrap.ensureIndex(config.es, client)
 

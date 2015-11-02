@@ -44,7 +44,6 @@ class TestESClient(config: ElasticSearchConfig, local: Boolean = true) extends S
   def deleteAllDatasetCopies(): Unit =
     deleteByQuery(termQuery("_type", config.datasetCopyMapping), Seq(config.datasetCopyMapping.mappingType))
 
-
   def searchColumnMapsByDataset(datasetId: String): SearchResults[ColumnMap] =
     client.prepareSearch(config.index)
           .setTypes(config.columnMapMapping.mappingType)

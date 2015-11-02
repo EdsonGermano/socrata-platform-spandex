@@ -102,7 +102,7 @@ class KeywordAnalyzerSpec extends FunSuiteLike with Matchers with AnalyzerTest w
   }
 
   test("match: non-english unicode") {
-    val expectedValue = "愛" // scalastyle:ignore
+    val expectedValue = "愛"
 
     val tokens = CompletionAnalyzer.analyze(expectedValue)
     tokens should contain(expectedValue)

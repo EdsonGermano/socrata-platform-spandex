@@ -3,7 +3,6 @@ package com.socrata.spandex.secondary
 import com.typesafe.scalalogging.slf4j.Logging
 import com.socrata.datacoordinator.secondary.ColumnInfo
 
-// scalastyle:off multiple.string.literals
 trait SecondaryEventLogger extends Logging {
   private[this] def logEvent(eventName: String, description: String): Unit =
     logger.info(s"$eventName event: $description")

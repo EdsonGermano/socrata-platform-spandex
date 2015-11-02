@@ -14,7 +14,7 @@ class SpandexSpec extends FunSuiteLike with MustMatchers {
     }
     thread.start()
     while (!Spandex.ready) {
-      Thread.sleep(1000) // scalastyle:ignore magic.number
+      Thread.sleep(1000)
     }
     thread.interrupt()
   }

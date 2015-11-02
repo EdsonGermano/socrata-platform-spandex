@@ -8,7 +8,6 @@ import com.socrata.spandex.common.{MarvelNames, PerfESClient}
 import org.elasticsearch.action.index.IndexRequestBuilder
 import org.openjdk.jmh.annotations._
 
-// scalastyle:off magic.number
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.AverageTime))
 @OutputTimeUnit(TimeUnit.MILLISECONDS)

@@ -7,7 +7,6 @@ import com.socrata.spandex.http.SpandexResult.Fields._
 import org.elasticsearch.common.unit.Fuzziness
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike, ShouldMatchers}
 
-// scalastyle:off magic.number
 class SpandexResultSpec extends FunSuiteLike with ShouldMatchers with TestESData with BeforeAndAfterAll {
   val config = new SpandexConfig
   val client = new TestESClient(config.es)
