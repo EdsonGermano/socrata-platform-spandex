@@ -330,7 +330,7 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
     response.results[FieldValue](aggName)
   }
 
-  private def logElasticsearchRequest(request: SearchRequestBuilder): Unit = {
+  private[this] def logElasticsearchRequest(request: SearchRequestBuilder): Unit = {
     logger.info(s"executing elasticsearch request ${request.toString.replaceAll("""[\n\s]+""", " ")}")
   }
 }
