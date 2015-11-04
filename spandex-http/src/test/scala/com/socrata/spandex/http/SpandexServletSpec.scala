@@ -66,6 +66,7 @@ class SpandexServletSpec extends ScalatraSuite with FunSuiteLike with TestESData
   private[this] val colsysid = col.systemColumnId
   private[this] val colid = col.userColumnId
   private[this] val textPrefix = "dat"
+
   test("suggest - some hits") {
     get(s"$routeSuggest/$dsid/$copynum/$colid/$textPrefix") {
       status should equal(HttpStatus.SC_OK)
@@ -109,9 +110,9 @@ class SpandexServletSpec extends ScalatraSuite with FunSuiteLike with TestESData
     }
     get(s"$routeSuggest/$dsid/$copynum/$colid/$text", (paramSize, "1")) {
       status should equal(HttpStatus.SC_OK)
-      body shouldNot include(makeRowData(colsysid, 1))
+      body should include(makeRowData(colsysid, 1))
       body shouldNot include(makeRowData(colsysid, 2))
-      body should include(makeRowData(colsysid, 3))
+      body shouldNot include(makeRowData(colsysid, 3))
       body shouldNot include(makeRowData(colsysid, 4))
       body shouldNot include(makeRowData(colsysid, 5))
     }

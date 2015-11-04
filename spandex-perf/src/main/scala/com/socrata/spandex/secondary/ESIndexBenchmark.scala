@@ -34,6 +34,7 @@ class ESIndexBenchmark extends MarvelNames {
   val columnUserId = "dead-beef"
   val version = 3L
   val stage = LifecycleStage.Published
+
   @Setup(Level.Iteration)
   def setupDataset(): Unit = {
     client.putDatasetCopy(datasetId, copyNum, version, stage, refresh = false)

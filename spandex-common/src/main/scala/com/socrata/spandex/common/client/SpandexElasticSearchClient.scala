@@ -282,6 +282,7 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
 
   def suggest(column: ColumnMap, size: Int, text: String,
               fuzz: Fuzziness, fuzzLength: Int, fuzzPrefix: Int): SearchResults[FieldValue] = {
+    val aggName = "values"
     val suggestionQuery = filteredQuery(
       boolQuery()
         .must(matchQuery(SpandexFields.Value, text)
@@ -299,12 +300,18 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
     val search = client.prepareSearch(config.index)
       .setTypes(config.fieldValueMapping.mappingType)
       .setQuery(suggestionQuery)
+      .setSearchType(SearchType.COUNT)
+      .addAggregation(
+        terms(aggName)
+          .field(SpandexFields.ValueRaw)
+          .size(size).shardSize(size * 2)
+          .order(Terms.Order.count(false)) // descending <- ascending=false
+      )
       .setSize(size)
 
     logElasticsearchRequest(search)
     val response = search.execute().actionGet()
-
-    response.results[FieldValue]
+    response.results[FieldValue](aggName)
   }
 
   def sample(column: ColumnMap, size: Int): SearchResults[FieldValue] = {

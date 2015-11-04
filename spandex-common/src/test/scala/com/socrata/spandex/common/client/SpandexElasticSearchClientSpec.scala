@@ -4,6 +4,7 @@ import com.socrata.datacoordinator.secondary.LifecycleStage
 import com.socrata.spandex.common.client.ResponseExtensions._
 import com.socrata.spandex.common.{SpandexConfig, TestESData}
 import org.elasticsearch.action.index.IndexRequestBuilder
+import org.elasticsearch.common.unit.Fuzziness
 import org.elasticsearch.index.engine.IndexFailedEngineException
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FunSuiteLike, Matchers}
 
@@ -279,7 +280,7 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike with Matchers with Bef
     retrieved.aggs.sortBy(_.key) should be(expected)
   }
 
-  test("sort by frequency") {
+  test("sort by frequency (doc count)") {
     val ds = datasets(0)
     val cp = copies(ds)(1)
     val col = ColumnMap(ds, cp.copyNumber, 47L, "col47")
@@ -287,7 +288,7 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike with Matchers with Bef
     val selected = 10
 
     val docs = for {row <- 1 to generated} yield {
-      FieldValue(col.datasetId, col.copyNumber, col.systemColumnId, row, Math.log(row).floor.toString)
+      FieldValue(col.datasetId, col.copyNumber, col.systemColumnId, row, "frequency " + Math.log(row).floor.toString)
     }
     val expected = docs
       .groupBy(q => q.value).map(r => BucketCount(r._1, r._2.length))
@@ -296,8 +297,12 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike with Matchers with Bef
     docs.foreach(client.indexFieldValue(_, refresh = false))
     client.refresh()
 
-    val retrieved = client.sample(col, selected)
-    retrieved.aggs should be(expected)
+    val sampled = client.sample(col, selected)
+    sampled.aggs should be(expected)
+
+    val suggested = client.suggest(col, selected, "freq",
+      Fuzziness.build(config.suggestFuzziness), config.suggestFuzzLength, config.suggestFuzzPrefix)
+    suggested.aggs should be(expected)
   }
 
   test("get latest copy of Stage Number(n) should throw") {

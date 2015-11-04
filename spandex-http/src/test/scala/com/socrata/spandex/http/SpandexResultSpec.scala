@@ -47,7 +47,7 @@ class SpandexResultSpec extends FunSuiteLike with ShouldMatchers with TestESData
     js should include(opt3String)
   }
 
-  test("json enocde empty result") {
+  test("json encode empty result") {
     val js = JsonUtil.renderJson(SpandexResult(Seq.empty))
     js should include(optionsEmptyJson)
   }
