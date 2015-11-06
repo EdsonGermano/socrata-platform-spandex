@@ -8,8 +8,7 @@ object SpandexFields {
   val UserColumnId = "user_column_id"
   val RowId        = "row_id"
   val Value        = "value"
-  val ValueInput   = "input"
-  val ValueOutput  = "output"
-  val RawValue     = "raw"
+  val ValueKeyword = "value_keyword"
+  val ValueRaw     = "value_raw"
   val Stage        = "stage"
 }

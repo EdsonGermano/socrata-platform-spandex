@@ -66,6 +66,7 @@ class SpandexServletSpec extends ScalatraSuite with FunSuiteLike with TestESData
   private[this] val colsysid = col.systemColumnId
   private[this] val colid = col.userColumnId
   private[this] val textPrefix = "dat"
+
   test("suggest - some hits") {
     get(s"$routeSuggest/$dsid/$copynum/$colid/$textPrefix") {
       status should equal(HttpStatus.SC_OK)
@@ -166,27 +167,6 @@ class SpandexServletSpec extends ScalatraSuite with FunSuiteLike with TestESData
       status should equal(HttpStatus.SC_NOT_FOUND)
     }
     get(s"$routeSuggest") {
-      status should equal(HttpStatus.SC_NOT_FOUND)
-    }
-  }
-
-  ignore("sample") {
-    get(s"$routeSample/$dsid/$copynum/$colid") {
-      contentTypeShouldBe(ContentTypeJson)
-      status should equal(HttpStatus.SC_OK)
-      body should include(optionsJson)
-      body should include(makeRowData(colsysid, 2))
-    }
-  }
-
-  ignore("sample without required params should return 404") {
-    get(s"$routeSample/$dsid/$copynum") {
-      status should equal(HttpStatus.SC_NOT_FOUND)
-    }
-    get(s"$routeSample/$dsid") {
-      status should equal(HttpStatus.SC_NOT_FOUND)
-    }
-    get(s"$routeSample") {
       status should equal(HttpStatus.SC_NOT_FOUND)
     }
   }

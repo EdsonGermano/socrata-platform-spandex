@@ -18,7 +18,6 @@ import org.scalatest.{Matchers, FunSuiteLike}
  * and capturing the batches of events that were passed to spandex secondary.
  * This test aims to be a good starting point to understand how the spandex secondary works.
  */
-// scalastyle:off
 class DatasetLifecycleSimulation extends FunSuiteLike with Matchers {
   val config = new SpandexConfig(ConfigFactory.load().getConfig("com.socrata.spandex")
     .withValue("elastic-search.index", ConfigValueFactory.fromAnyRef("spandex-dataset-lifecycle")))

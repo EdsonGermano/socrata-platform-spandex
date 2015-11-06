@@ -7,7 +7,6 @@ import com.socrata.spandex.http.SpandexResult.Fields._
 import org.elasticsearch.common.unit.Fuzziness
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike, ShouldMatchers}
 
-// scalastyle:off magic.number
 class SpandexResultSpec extends FunSuiteLike with ShouldMatchers with TestESData with BeforeAndAfterAll {
   val config = new SpandexConfig
   val client = new TestESClient(config.es)
@@ -48,7 +47,7 @@ class SpandexResultSpec extends FunSuiteLike with ShouldMatchers with TestESData
     js should include(opt3String)
   }
 
-  test("json enocde empty result") {
+  test("json encode empty result") {
     val js = JsonUtil.renderJson(SpandexResult(Seq.empty))
     js should include(optionsEmptyJson)
   }
@@ -63,7 +62,7 @@ class SpandexResultSpec extends FunSuiteLike with ShouldMatchers with TestESData
     js should include(rows(col)(0).value)
   }
 
-  ignore("transform from search response") {
+  test("transform from search response") {
     val ds = datasets(0)
     val copy = copies(ds)(1)
     val col = columns(ds, copy)(2)

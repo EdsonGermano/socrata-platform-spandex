@@ -9,9 +9,9 @@ trait TestESData {
   val datasets = Seq("primus.1234", "primus.9876")
 
   def copies(dataset: String): Seq[DatasetCopy] = {
-    val snapshot    = DatasetCopy(dataset, 1, 5, LifecycleStage.Snapshotted) // scalastyle:ignore magic.number
-    val published   = DatasetCopy(dataset, 2, 10, LifecycleStage.Published) // scalastyle:ignore magic.number
-    val workingCopy = DatasetCopy(dataset, 3, 15, LifecycleStage.Unpublished) // scalastyle:ignore magic.number
+    val snapshot    = DatasetCopy(dataset, 1, 5, LifecycleStage.Snapshotted)
+    val published   = DatasetCopy(dataset, 2, 10, LifecycleStage.Published)
+    val workingCopy = DatasetCopy(dataset, 3, 15, LifecycleStage.Unpublished)
     Seq(snapshot, published, workingCopy).sortBy(_.copyNumber)
   }
 

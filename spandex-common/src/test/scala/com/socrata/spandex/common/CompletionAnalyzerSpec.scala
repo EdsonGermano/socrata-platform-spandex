@@ -73,15 +73,6 @@ class CompletionAnalyzerSpec extends FunSuiteLike with Matchers with AnalyzerTes
     tokens should equal(expectedTokens)
   }
 
-  test("field value json includes value input/output elements") {
-    val value = "Donuts and Coconuts"
-    val expectedInputTokens = List("donuts", "and", "coconuts")
-    val fv = FieldValue(col.datasetId, col.copyNumber, col.systemColumnId, 11, value)
-    val json = JsonUtil.renderJson(fv)
-    json should include("\"input\":[")
-    json should include("\"output\":")
-  }
-
   test("match: term") {
     val expectedValue = "Former President Abraham Lincoln"
     index(expectedValue)
@@ -157,7 +148,7 @@ class CompletionAnalyzerSpec extends FunSuiteLike with Matchers with AnalyzerTes
   }
 
   test("match: non-english unicode") {
-    val expectedValue = "愛" // scalastyle:ignore
+    val expectedValue = "愛"
 
     val tokens = CompletionAnalyzer.analyze(expectedValue)
     tokens should contain(expectedValue)

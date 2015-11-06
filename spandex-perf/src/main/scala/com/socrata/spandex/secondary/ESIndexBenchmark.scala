@@ -8,7 +8,6 @@ import com.socrata.spandex.common.{MarvelNames, PerfESClient}
 import org.elasticsearch.action.index.IndexRequestBuilder
 import org.openjdk.jmh.annotations._
 
-// scalastyle:off magic.number
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.AverageTime))
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -35,6 +34,7 @@ class ESIndexBenchmark extends MarvelNames {
   val columnUserId = "dead-beef"
   val version = 3L
   val stage = LifecycleStage.Published
+
   @Setup(Level.Iteration)
   def setupDataset(): Unit = {
     client.putDatasetCopy(datasetId, copyNum, version, stage, refresh = false)

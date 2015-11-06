@@ -10,18 +10,16 @@ import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsReques
 import org.elasticsearch.action.bulk.BulkResponse
 import org.elasticsearch.action.delete.{DeleteRequestBuilder, DeleteResponse}
 import org.elasticsearch.action.index.{IndexRequestBuilder, IndexResponse}
-import org.elasticsearch.action.search.SearchType
+import org.elasticsearch.action.search.{SearchRequestBuilder, SearchType}
 import org.elasticsearch.action.update.{UpdateRequestBuilder, UpdateResponse}
 import org.elasticsearch.common.unit.{Fuzziness, TimeValue}
-import org.elasticsearch.index.query.QueryBuilder
+import org.elasticsearch.index.query.FilterBuilders._
 import org.elasticsearch.index.query.QueryBuilders._
+import org.elasticsearch.index.query.{FilterBuilder, MatchQueryBuilder, QueryBuilder}
 import org.elasticsearch.search.aggregations.AggregationBuilders._
 import org.elasticsearch.search.aggregations.bucket.terms.Terms
 import org.elasticsearch.search.sort.SortOrder
-import org.elasticsearch.search.suggest.Suggest
-import org.elasticsearch.search.suggest.completion.CompletionSuggestionFuzzyBuilder
 
-// scalastyle:off number.of.methods
 case class ElasticSearchResponseFailed(msg: String) extends Exception(msg)
 
 // Setting refresh to true on ES write calls, because we always want to be
@@ -34,6 +32,7 @@ case class ElasticSearchResponseFailed(msg: String) extends Exception(msg)
 // - refresh=true only guarantees consistency on a single shard.
 // - We aren't actually sure what the perf implications of running like this at production scale are.
 // http://www.elastic.co/guide/en/elasticsearch/reference/1.x/docs-index_.html#index-refresh
+// scalastyle:ignore number.of.methods
 class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSearchClient(config) with Logging {
   protected def byDatasetIdQuery(datasetId: String): QueryBuilder = termQuery(SpandexFields.DatasetId, datasetId)
   protected def byDatasetIdAndStageQuery(datasetId: String, stage: LifecycleStage): QueryBuilder =
@@ -46,8 +45,10 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
     boolQuery().must(termQuery(SpandexFields.DatasetId, datasetId))
                .must(termQuery(SpandexFields.CopyNumber, copyNumber))
                .must(termQuery(SpandexFields.ColumnId, columnId))
-  protected def byColumnCompositeId(column: ColumnMap): QueryBuilder =
-    boolQuery().must(termQuery(SpandexFields.CompositeId, column.compositeId))
+  protected def byColumnIdFilter(datasetId: String, copyNumber: Long, columnId: Long): FilterBuilder =
+    boolFilter().must(termFilter(SpandexFields.DatasetId, datasetId))
+                .must(termFilter(SpandexFields.CopyNumber, copyNumber))
+                .must(termFilter(SpandexFields.ColumnId, columnId))
   protected def byRowIdQuery(datasetId: String, copyNumber: Long, rowId: Long): QueryBuilder =
     boolQuery().must(termQuery(SpandexFields.DatasetId, datasetId))
                .must(termQuery(SpandexFields.CopyNumber, copyNumber))
@@ -280,38 +281,63 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
     deleteByQuery(byDatasetIdQuery(datasetId), Seq(config.datasetCopyMapping.mappingType))
 
   def suggest(column: ColumnMap, size: Int, text: String,
-              fuzz: Fuzziness, fuzzLength: Int, fuzzPrefix: Int): Suggest = {
-    val suggestion = new CompletionSuggestionFuzzyBuilder("suggest")
-      .addContextField(SpandexFields.CompositeId, column.compositeId)
-      .setFuzziness(fuzz).setFuzzyPrefixLength(fuzzPrefix).setFuzzyMinLength(fuzzLength)
-      .field(SpandexFields.Value)
-      .text(text)
-      .size(size)
-
-    val response = client.prepareSuggest(config.index)
-      .addSuggestion(suggestion)
-      .execute().actionGet()
-
-    response.getSuggest
-  }
-
-  /* Not yet used.
-   * This grabs the TOP N documents by frequency.
-   */
-  def sample(column: ColumnMap, size: Int): SearchResults[FieldValue] = {
+              fuzz: Fuzziness, fuzzLength: Int, fuzzPrefix: Int): SearchResults[FieldValue] = {
     val aggName = "values"
-    val response = client.prepareSearch(config.index)
+    val suggestionQuery = filteredQuery(
+      boolQuery()
+        .must(matchQuery(SpandexFields.Value, text)
+          .operator(MatchQueryBuilder.Operator.OR)
+          .fuzziness(fuzz)
+          .prefixLength(fuzzPrefix))
+        .should(matchQuery(SpandexFields.Value, text)
+          .operator(MatchQueryBuilder.Operator.AND)
+          .fuzziness(fuzz)
+          .prefixLength(fuzzPrefix))
+        .should(matchQuery(SpandexFields.ValueKeyword, text))
+      .minimumShouldMatch("50%"),
+      byColumnIdFilter(column.datasetId, column.copyNumber, column.systemColumnId))
+
+    val search = client.prepareSearch(config.index)
       .setTypes(config.fieldValueMapping.mappingType)
-      .setQuery(byColumnCompositeId(column))
+      .setQuery(suggestionQuery)
       .setSearchType(SearchType.COUNT)
       .addAggregation(
         terms(aggName)
-          .field(SpandexFields.RawValue)
+          .field(SpandexFields.ValueRaw)
           .size(size).shardSize(size * 2)
           .order(Terms.Order.count(false)) // descending <- ascending=false
       )
       .setSize(size)
-      .execute.actionGet
+
+    logElasticsearchRequest(search)
+    val response = search.execute().actionGet()
     response.results[FieldValue](aggName)
+  }
+
+  def sample(column: ColumnMap, size: Int): SearchResults[FieldValue] = {
+    val aggName = "values"
+    val sampleQuery = filteredQuery(
+      matchAllQuery(),
+      byColumnIdFilter(column.datasetId, column.copyNumber, column.systemColumnId))
+    val search = client.prepareSearch(config.index)
+      .setTypes(config.fieldValueMapping.mappingType)
+      .setQuery(sampleQuery)
+      .setSearchType(SearchType.COUNT)
+      .addAggregation(
+        terms(aggName)
+          .field(SpandexFields.ValueRaw)
+          .size(size).shardSize(size * 2)
+          .order(Terms.Order.count(false)) // descending <- ascending=false
+      )
+      .setSize(size)
+
+    logElasticsearchRequest(search)
+    val response = search.execute.actionGet
+
+    response.results[FieldValue](aggName)
+  }
+
+  private[this] def logElasticsearchRequest(request: SearchRequestBuilder): Unit = {
+    logger.info(s"executing elasticsearch request ${request.toString.replaceAll("""[\n\s]+""", " ")}")
   }
 }

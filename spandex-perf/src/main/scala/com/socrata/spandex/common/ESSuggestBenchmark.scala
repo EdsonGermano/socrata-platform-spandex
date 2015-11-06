@@ -39,6 +39,7 @@ class ESSuggestBenchmark extends MarvelNames {
   val version = 3L
   val stage = LifecycleStage.Published
   val col = ColumnMap(datasetId, copyNumber, systemColumnId, userColumndId)
+
   @Setup(Level.Iteration)
   def setupDataset(): Unit = {
     client.putDatasetCopy(datasetId, copyNumber, version, stage, refresh = false)

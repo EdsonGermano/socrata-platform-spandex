@@ -6,11 +6,6 @@ import com.socrata.datacoordinator.secondary.LifecycleStage
 import com.socrata.spandex.common.client.{ColumnMap, DatasetCopy, FieldValue, TestESClient}
 import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
 import org.elasticsearch.common.unit.Fuzziness
-import org.elasticsearch.search.suggest.Suggest.Suggestion
-import org.elasticsearch.search.suggest.completion.CompletionSuggestion.Entry
-
-import scala.collection.JavaConverters._
-import scala.collection.mutable
 
 trait AnalyzerTest {
   val analyzerEnabled: Boolean
@@ -35,6 +30,9 @@ trait AnalyzerTest {
   protected def analyzerBeforeAll(): Unit = {
     SpandexBootstrap.ensureIndex(config.es, client)
     CompletionAnalyzer.configure(config.analysis)
+
+    client.putDatasetCopy(ds, copy.copyNumber, copy.version, copy.stage, refresh = false)
+    client.putColumnMap(col, refresh = true)
   }
 
   protected def analyzerAfterAll(): Unit = {
@@ -54,11 +52,8 @@ trait AnalyzerTest {
     docId += 1
   }
 
-  protected def suggest(query: String, fuzz: Fuzziness = Fuzziness.ZERO): mutable.Buffer[String] = {
+  protected def suggest(query: String, fuzz: Fuzziness = Fuzziness.ZERO): Seq[String] = {
     val response = client.suggest(col, 10, query, fuzz, 2, 1)
-    val suggest = response.getSuggestion[Suggestion[Entry]]("suggest")
-    val entries = suggest.getEntries
-    val options = entries.get(0).getOptions
-    options.asScala.map(_.getText.toString)
+    response.thisPage.map(_.value) ++ response.aggs.map(_.key)
   }
 }

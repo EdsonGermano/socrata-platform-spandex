@@ -7,7 +7,6 @@ import org.elasticsearch.search.suggest.Suggest.Suggestion
 import org.elasticsearch.search.suggest.completion.CompletionSuggestion.Entry
 
 import scala.collection.JavaConverters._
-import scala.util.Try
 
 case class SpandexOption(text: String, score: Option[Float])
 
@@ -25,17 +24,20 @@ object SpandexResult {
     val entries = suggest.getEntries
     val options = entries.get(0).getOptions
     SpandexResult(options.asScala.map { a =>
-      SpandexOption(a.getText.string(), Try{Some(a.getScore)}.getOrElse(None))
+      SpandexOption(a.getText.string(), Option(a.getScore))
     })
   }
 
-  /* Not yet used.
-   * Transforms a search result with aggregation into spandex result options
-   */
-  def apply(response: SearchResults[FieldValue]): SpandexResult =
-    SpandexResult(response.aggs.map { src =>
-      SpandexOption(src.key, Some(src.docCount))
-    })
+  def apply(response: SearchResults[FieldValue]): SpandexResult = {
+    val hits = response.thisPage.map { src =>
+      // TODO: aggregate with doc count
+      SpandexOption(src.value, None)
+    }
+    val buckets = response.aggs.map { bc =>
+      SpandexOption(bc.key, Some(bc.docCount))
+    }
+    SpandexResult(hits ++ buckets)
+  }
 
   object Fields {
     private[this] def formatQuotedString(s: String) = "\"%s\"" format s

@@ -14,7 +14,6 @@ import org.joda.time.DateTime
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FunSuiteLike, Matchers}
 
-// scalastyle:off
 class VersionEventsHandlerSpec extends FunSuiteLike
                                   with Matchers
                                   with BeforeAndAfterAll
@@ -40,14 +39,14 @@ class VersionEventsHandlerSpec extends FunSuiteLike
     val invalidDataVersion = 0
     val events = Seq(Truncated).iterator
 
-    an [IllegalArgumentException] should be thrownBy handler.handle("alpha.75", invalidDataVersion, events)
+    an[IllegalArgumentException] should be thrownBy handler.handle("alpha.75", invalidDataVersion, events)
   }
 
   test("WorkingCopyCreated - throw an exception if multiple working copies are encountered in the same event sequence") {
     val copyInfo = CopyInfo(new CopyId(100), 1, LifecycleStage.Unpublished, 1, DateTime.now)
     val events = Seq(WorkingCopyCreated(copyInfo), WorkingCopyCreated(copyInfo)).iterator
 
-    a [UnsupportedOperationException] should be thrownBy handler.handle("alpha.75", 1, events)
+    a[UnsupportedOperationException] should be thrownBy handler.handle("alpha.75", 1, events)
   }
 
   test("WorkingCopyCreated - throw an exception if the copy to be created already exists") {
@@ -58,7 +57,7 @@ class VersionEventsHandlerSpec extends FunSuiteLike
 
     client.putDatasetCopy(dataset, copyInfo.copyNumber, dataVersion, copyInfo.lifecycleStage, refresh = true)
 
-    a [ResyncSecondaryException] should be thrownBy handler.handle(dataset, 1, events)
+    a[ResyncSecondaryException] should be thrownBy handler.handle(dataset, 1, events)
   }
 
   test("WorkingCopyCreated - a new dataset copy should be added to the index") {
@@ -141,7 +140,7 @@ class VersionEventsHandlerSpec extends FunSuiteLike
   test("WorkingCopyPublished - throw exception if the current copy is not Unpublished.") {
     client.putDatasetCopy("wcp-invalid-test", 1, 2, LifecycleStage.Published, refresh = true)
 
-    an [InvalidStateBeforeEvent] should be thrownBy
+    an[InvalidStateBeforeEvent] should be thrownBy
       handler.handle("wcp-invalid-test", 3, Seq(WorkingCopyPublished).iterator)
   }
 
@@ -172,7 +171,7 @@ class VersionEventsHandlerSpec extends FunSuiteLike
     val expectedBefore = Some(DatasetCopy("wcd-test-initial-copy", 1, 1, LifecycleStage.Unpublished))
     client.datasetCopyLatest("wcd-test-initial-copy") should be(expectedBefore)
 
-    an [InvalidStateBeforeEvent] should be thrownBy
+    an[InvalidStateBeforeEvent] should be thrownBy
       handler.handle("wcd-test-initial-copy", 2, Seq(WorkingCopyDropped).iterator)
   }
 
@@ -182,7 +181,7 @@ class VersionEventsHandlerSpec extends FunSuiteLike
     val expectedBefore = Some(DatasetCopy("wcd-test-published", 2, 2, LifecycleStage.Published))
     client.datasetCopyLatest("wcd-test-published") should be(expectedBefore)
 
-    an [InvalidStateBeforeEvent] should be thrownBy
+    an[InvalidStateBeforeEvent] should be thrownBy
       handler.handle("wcd-test-published", 3, Seq(WorkingCopyDropped).iterator)
   }
 
@@ -216,7 +215,7 @@ class VersionEventsHandlerSpec extends FunSuiteLike
 
     val copyInfo = CopyInfo(new CopyId(100), 2, LifecycleStage.Unpublished, 2, DateTime.now)
     val events =  Seq(SnapshotDropped(copyInfo)).iterator
-    an [InvalidStateBeforeEvent] should be thrownBy handler.handle("sd-test-notsnapshot", 3, events)
+    an[InvalidStateBeforeEvent] should be thrownBy handler.handle("sd-test-notsnapshot", 3, events)
   }
 
   test("SnapshotDropped - the specified snapshot should be dropped") {
