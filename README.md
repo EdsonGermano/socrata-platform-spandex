@@ -4,19 +4,19 @@ autocomplete with elasticsearch
 [![Codacy Badge](https://www.codacy.com/project/badge/821a4d00582d4c4b8a4641ee1ee94393)](https://www.codacy.com/public/johnkrah/spandex)
 
 ## Install ElasticSearch
-Make sure you're running ES 1.4.4 (NOT 1.5 which is installed by default by brew).
+Make sure you're running ES 1.7.2-ish (sometimes not what is installed by default by brew).
 
 ```sh
 cd ~
-curl -OL https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-1.4.4.tar.gz
-tar xzvf elasticsearch-1.4.4.tar.gz
+curl -OL https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-1.7.2.tar.gz
+tar xzvf elasticsearch-1.7.2.tar.gz
 ```
 
 Add these aliases to your `.bash_profile` if you are so inclined:
 
 ```sh
 # Elastic Search
-alias es-start="~/elasticsearch-1.4.4/bin/elasticsearch -d"
+alias es-start="~/elasticsearch-1.7.2/bin/elasticsearch -d"
 alias es-stop="curl -X POST 'http://localhost:9200/_shutdown'"
 ```
 
