@@ -165,12 +165,14 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
       .setSize(config.dataCopyBatchSize)
       .execute.actionGet
 
+    var scrollId = scrollInit.getScrollId
     var batch = Seq.empty[Any]
     do {
-      val response = client.prepareSearchScroll(scrollInit.getScrollId)
+      val response = client.prepareSearchScroll(scrollId)
         .setScroll(timeout)
         .execute.actionGet
 
+      scrollId = response.getScrollId
       batch = response.getHits.hits.map { h => client.prepareDelete(h.index, h.`type`, h.id) }
 
       if (batch.nonEmpty) sendBulkRequest(batch, refresh = false)
@@ -189,12 +191,14 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
                            .setSize(config.dataCopyBatchSize)
                            .execute.actionGet
 
+    var scrollId = scrollInit.getScrollId
     var batch = Seq.empty[Any]
     do {
-      val response = client.prepareSearchScroll(scrollInit.getScrollId)
+      val response = client.prepareSearchScroll(scrollId)
                            .setScroll(timeout)
                            .execute.actionGet
 
+      scrollId = response.getScrollId
       batch = response.results[FieldValue].thisPage.map { src =>
         fieldValueIndexRequest(FieldValue(src.datasetId, to.copyNumber, src.columnId, src.rowId, src.value))
       }
