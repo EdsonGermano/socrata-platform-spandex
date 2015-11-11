@@ -46,9 +46,10 @@ class SpandexElasticSearchClient(config: ElasticSearchConfig) extends ElasticSea
                .must(termQuery(SpandexFields.CopyNumber, copyNumber))
                .must(termQuery(SpandexFields.ColumnId, columnId))
   protected def byColumnIdFilter(datasetId: String, copyNumber: Long, columnId: Long): FilterBuilder =
-    boolFilter().must(termFilter(SpandexFields.DatasetId, datasetId))
-                .must(termFilter(SpandexFields.CopyNumber, copyNumber))
-                .must(termFilter(SpandexFields.ColumnId, columnId))
+    boolFilter().must(termFilter(SpandexFields.DatasetId, datasetId).cache(false))
+                .must(termFilter(SpandexFields.CopyNumber, copyNumber).cache(false))
+                .must(termFilter(SpandexFields.ColumnId, columnId).cache(false))
+                .cache(true)
   protected def byRowIdQuery(datasetId: String, copyNumber: Long, rowId: Long): QueryBuilder =
     boolQuery().must(termQuery(SpandexFields.DatasetId, datasetId))
                .must(termQuery(SpandexFields.CopyNumber, copyNumber))
