@@ -98,7 +98,7 @@ object Deps {
 
   lazy val resolverList = Seq(
     "Scalaz Bintray Repo" at "https://dl.bintray.com/scalaz/releases", // scalaz-stream used in scalatra 2.4.x
-    "socrata releases" at "https://repository-socrata-oss.forge.cloudbees.com/release"
+    "socrata releases" at "https://repo.socrata.com/artifactory/libs-release"
   )
 
   lazy val socrata = Seq(
