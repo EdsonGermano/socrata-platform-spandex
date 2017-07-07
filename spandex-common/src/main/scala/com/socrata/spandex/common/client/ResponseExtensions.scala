@@ -21,6 +21,7 @@ import com.socrata.spandex.common.CompletionAnalyzer
 case class DatasetCopy(datasetId: String, copyNumber: Long, version: Long, stage: LifecycleStage) {
   lazy val docId = DatasetCopy.makeDocId(datasetId, copyNumber)
 }
+
 object DatasetCopy {
   implicit val lifecycleStageCodec = new JsonDecode[LifecycleStage] with JsonEncode[LifecycleStage] {
     def decode(x: JValue): JsonDecode.DecodeResult[LifecycleStage] = {
@@ -51,6 +52,7 @@ case class ColumnMap(
   lazy val docId = ColumnMap.makeDocId(datasetId, copyNumber, userColumnId)
   lazy val compositeId = ColumnMap.makeCompositeId(datasetId, copyNumber, systemColumnId)
 }
+
 object ColumnMap {
   implicit val jCodec = AutomaticJsonCodecBuilder[ColumnMap]
 
@@ -73,12 +75,14 @@ object ColumnMap {
 
 @JsonKeyStrategy(Strategy.Underscore)
 case class CompositeId(compositeId: String)
+
 object CompositeId {
   implicit val codec = AutomaticJsonCodecBuilder[CompositeId]
 }
 
 @JsonKeyStrategy(Strategy.Underscore)
 case class SuggestWithContext(input: Seq[String], contexts: CompositeId)
+
 object SuggestWithContext {
   implicit val codec = AutomaticJsonCodecBuilder[SuggestWithContext]
 }
@@ -96,6 +100,7 @@ case class FieldValue(
 
   def worthIndexing: Boolean = rawValue != null && rawValue.trim.nonEmpty  // scalastyle:ignore null
 }
+
 object FieldValue {
   implicit val jCodec = AutomaticJsonCodecBuilder[FieldValue]
   def suggestTokens(rawValue: String): Seq[String] = CompletionAnalyzer.analyze(rawValue)
@@ -115,6 +120,7 @@ object FieldValue {
 
 @JsonKeyStrategy(Strategy.Underscore)
 case class BucketCount(key: String, docCount: Long)
+
 object BucketCount {
   implicit val jCodec = AutomaticJsonCodecBuilder[BucketCount]
 }

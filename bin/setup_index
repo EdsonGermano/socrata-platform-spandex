@@ -1,0 +1,40 @@
+#!/bin/bash
+
+set -e
+
+ENVIRONMENT="local"
+
+if [[ "$1" != "" ]]; then
+    ENVIRONMENT="$1"
+fi
+
+if [[ "$ENVIRONMENT" != "local" &&
+      "$ENVIRONMENT" != "staging" &&
+      "$ENVIRONMENT" != "rc" &&
+      "$ENVIRONMENT" != "eu-west-1-prod" &&
+      "$ENVIRONMENT" != "fedramp-prod" ]]; then
+    echo "Invalid environment specified ($ENVIRONMENT)"
+    echo "Must be one of local (default), staging, rc, eu-west-1-prod, fedramp-prod"
+    exit 1
+fi
+
+JQ=`which jq`
+
+if [[ $ENVIRONMENT == "fedramp-prod" ]]; then
+    JQ=/data/home/rlvoyer/jq-linux64
+fi
+
+HERE="$PWD"
+
+ENV_SETTINGS=$(cat $HERE/spandex-common/src/main/resources/cluster_overrides.json | $JQ ".\"$ENVIRONMENT\"")
+ES_CLUSTER_URL=$(echo $ENV_SETTINGS | $JQ -r '[.host, .port|tostring] | join(":")')
+CLUSTER_SETTINGS=$(echo $ENV_SETTINGS | $JQ -c '.settings.index')
+
+cat $HERE/spandex-common/src/main/resources/settings.json |
+    $JQ --argjson cluster_settings "$CLUSTER_SETTINGS" '{"settings": {"index": (.index + $cluster_settings)}}' > /tmp/settings_full.json
+
+TIMESTAMP=$(date +"%Y%m%d")
+INDEX_NAME="spandex-$TIMESTAMP"
+
+echo "Creating index $INDEX_NAME on cluster at $ES_CLUSTER_URL..."
+curl -s -o /dev/null -XPUT "http://$ES_CLUSTER_URL/$INDEX_NAME" -d @/tmp/settings_full.json

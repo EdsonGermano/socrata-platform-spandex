@@ -1,0 +1,52 @@
+{
+  "staging": {
+    "host": "spandex.elasticsearch.aws-us-west-2-staging.socrata.net",
+    "port": 80,
+    "settings": {
+      "index": {
+        "number_of_shards": "5",
+        "number_of_replicas": "1"
+      }
+    }
+  },
+  "rc": {
+    "host": "spandex.elasticsearch.aws-us-west-2-rc.socrata.net",
+    "port": 80,
+    "settings": {
+      "index": {
+        "number_of_shards": "5",
+        "number_of_replicas": "1"
+      }
+    }
+  },
+  "eu-west-1-prod": {
+    "host": "spandex.elasticsearch.aws-eu-west-1-prod.socrata.net",
+    "port": 80,
+    "settings": {
+      "index": {
+        "number_of_shards": "12",
+        "number_of_replicas": "1"
+      }
+    }
+  },
+  "fedramp-prod": {
+    "host": "spandex.elasticsearch.aws-us-east-1-fedramp-prod.socrata.net",
+    "port": 80,
+    "settings": {
+      "index": {
+        "number_of_shards": "12",
+        "number_of_replicas": "1"
+      }
+    }
+  },
+  "local": {
+    "host": "localhost",
+    "port": 9200,
+    "settings": {
+      "index": {
+        "number_of_shards": "5",
+        "number_of_replicas": "1"
+      }
+    }
+  }
+}
