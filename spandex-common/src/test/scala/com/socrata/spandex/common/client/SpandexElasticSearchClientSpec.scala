@@ -6,7 +6,7 @@ import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FunSuiteLike, Match
 
 import com.socrata.spandex.common.client.ResponseExtensions._
 import com.socrata.spandex.common.client.SpandexElasticSearchClient._
-import com.socrata.spandex.common.{SpandexConfig, TestESData}
+import com.socrata.spandex.common.TestESData
 
 // scalastyle:off
 class SpandexElasticSearchClientSpec extends FunSuiteLike
@@ -14,8 +14,9 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike
   with BeforeAndAfterAll
   with BeforeAndAfterEach
   with TestESData {
-  val config = new SpandexConfig
-  val client = new TestESClient(config.es)
+
+  val indexName = getClass.getSimpleName.toLowerCase
+  val client = new TestESClient(indexName)
 
   override def afterAll(): Unit = client.close()
 
@@ -28,7 +29,7 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike
 
   def verifyFieldValue(fieldValue: FieldValue): Option[FieldValue] =
     client.client
-      .prepareGet(config.es.index, FieldValueType, fieldValue.docId)
+      .prepareGet(indexName, FieldValueType, fieldValue.docId)
       .execute.actionGet
       .result[FieldValue]
 

@@ -15,8 +15,8 @@ import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FunSuiteLike, Matchers}
 
 class TestSpandexSecondary(config: ElasticSearchConfig, testClient: TestESClient) extends SpandexSecondaryLike {
-  val client    = testClient
-  val index     = config.index
+  val client = testClient
+  val index = config.index
   val batchSize = config.dataCopyBatchSize
 
   def shutdown(): Unit = client.close()
@@ -24,14 +24,16 @@ class TestSpandexSecondary(config: ElasticSearchConfig, testClient: TestESClient
 
 // scalastyle:off
 class SpandexSecondaryLikeSpec extends FunSuiteLike with Matchers with TestESData with BeforeAndAfterEach with BeforeAndAfterAll {
-  lazy val config = new SpandexConfig
-  lazy val testClient = new TestESClient(config.es)
-  lazy val secondary = new TestSpandexSecondary(config.es, testClient)
+  val config = new SpandexConfig
+
+  val indexName = getClass.getSimpleName.toLowerCase
+  val testClient = new TestESClient(indexName)
+  val secondary = new TestSpandexSecondary(config.es, testClient)
 
   def client = secondary.client
 
   override protected def beforeAll(): Unit =
-    SpandexElasticSearchClient.ensureIndex(config.es.index, config.es.clusterName, client)
+    SpandexElasticSearchClient.ensureIndex(config.es.index, client)
 
   override def beforeEach(): Unit = bootstrapData()
 

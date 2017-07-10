@@ -1,6 +1,6 @@
 {
   "staging": {
-    "host": "spandex.elasticsearch.aws-us-west-2-staging.socrata.net",
+    "host": "autocomplete.elasticsearch.aws-us-west-2-staging.socrata.net",
     "port": 80,
     "settings": {
       "index": {
@@ -10,7 +10,7 @@
     }
   },
   "rc": {
-    "host": "spandex.elasticsearch.aws-us-west-2-rc.socrata.net",
+    "host": "autocomplete.elasticsearch.aws-us-west-2-rc.socrata.net",
     "port": 80,
     "settings": {
       "index": {
@@ -20,7 +20,7 @@
     }
   },
   "eu-west-1-prod": {
-    "host": "spandex.elasticsearch.aws-eu-west-1-prod.socrata.net",
+    "host": "autocomplete.elasticsearch.aws-eu-west-1-prod.socrata.net",
     "port": 80,
     "settings": {
       "index": {
@@ -30,7 +30,7 @@
     }
   },
   "fedramp-prod": {
-    "host": "spandex.elasticsearch.aws-us-east-1-fedramp-prod.socrata.net",
+    "host": "autocomplete.elasticsearch.aws-us-east-1-fedramp-prod.socrata.net",
     "port": 80,
     "settings": {
       "index": {

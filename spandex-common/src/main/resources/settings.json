@@ -2,23 +2,27 @@
   "index": {
     "analysis": {
       "analyzer": {
-        "case_insensitive_keyword": {
-          "tokenizer": "keyword",
-          "filter": ["lowercase"]
-        },
-        "case_insensitive_whitespace": {
-          "tokenizer": "whitespace",
-          "filter": ["lowercase"]
+        "autocomplete": {
+          "type": "custom",
+          "tokenizer": "word",
+          "filter": ["lowercase", "autocomplete_edge_ngram"]
         },
         "case_insensitive_word": {
           "tokenizer": "word",
           "filter": ["lowercase"]
         }
       },
+      "filter": {
+        "autocomplete_edge_ngram": {
+          "type": "edge_ngram",
+          "min_gram": 1,
+          "max_gram": 20
+        }
+      },
       "tokenizer": {
         "word": {
           "type": "pattern",
-          "pattern": "[\\p{C}\\p{P}\\p{Sm}\\p{Sk}\\p{So}\\p{Z}&&[^\\&]]+",
+          "pattern": "[\\p{C}\\p{P}\\p{Sm}\\p{Sk}\\p{So}\\p{Z}]+",
           "flags": "CASE_INSENSITIVE",
           "group": -1
         }

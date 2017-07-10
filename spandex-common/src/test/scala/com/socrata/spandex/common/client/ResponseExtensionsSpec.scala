@@ -1,5 +1,8 @@
 package com.socrata.spandex.common.client
 
+import com.rojoma.json.v3.codec.JsonEncode
+import com.rojoma.json.v3.interpolation._
+import com.socrata.datacoordinator.secondary.LifecycleStage
 import org.elasticsearch.action.DocWriteRequest.OpType
 import org.elasticsearch.action.DocWriteResponse.Result
 import org.elasticsearch.action.bulk.{BulkItemResponse, BulkResponse}
@@ -59,5 +62,20 @@ class ResponseExtensionsSpec extends FunSuiteLike
     val bulkResponse = new BulkResponse(itemResponses, 10L)
 
     bulkResponse.deletions shouldBe empty
+  }
+
+  test("JSON serialzation of dataset copies, column maps, and field values includes composite fields") {
+    val datasetId = "ds.one"
+    val datasetCopy = DatasetCopy(datasetId, 1, 42, LifecycleStage.Published)
+    var expected = j"""{"dataset_id":"ds.one","copy_number":1,"version":42,"stage":"Published"}"""
+    JsonEncode.toJValue(datasetCopy) should be(expected)
+
+    val columnMap = ColumnMap(datasetCopy.datasetId, datasetCopy.copyNumber, 2, "column2")
+    expected = j"""{"dataset_id":"ds.one","copy_number":1,"system_column_id":2,"user_column_id":"column2"}"""
+    JsonEncode.toJValue(columnMap) should be(expected)
+
+    val fieldValue = FieldValue(columnMap.datasetId, columnMap.copyNumber, columnMap.systemColumnId, 42, "foo")
+    expected = j"""{"column_id":2,"composite_id":"ds.one|1|2","copy_number":1,"dataset_id":"ds.one","row_id":42,"value":"foo"}"""
+    JsonEncode.toJValue(fieldValue) should be(expected)
   }
 }

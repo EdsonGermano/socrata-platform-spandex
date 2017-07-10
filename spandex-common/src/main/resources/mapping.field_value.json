@@ -19,22 +19,16 @@
     "row_id": {
       "type": "long"
     },
-    "raw_value": {
-      "type": "keyword"
-    },
-    "suggest": {
-      "type": "completion",
-      "analyzer": "case_insensitive_word",
-      "preserve_separators": false,
-      "preserve_position_increments": false,
-      "max_input_length": 50,
-      "contexts": [
-        {
-          "name": "composite_id",
-          "type": "category",
-          "path": "composite_id"
+    "value": {
+      "type": "keyword",
+      "fields": {
+        "autocomplete": {
+          "type": "text",
+          "analyzer": "autocomplete",
+          "term_vector": "with_positions_offsets",
+          "search_analyzer": "case_insensitive_word"
         }
-      ]
+      }
     }
   }
 }

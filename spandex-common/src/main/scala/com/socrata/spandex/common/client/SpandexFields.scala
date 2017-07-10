@@ -7,7 +7,8 @@ object SpandexFields {
   val ColumnId = "column_id"
   val UserColumnId = "user_column_id"
   val RowId = "row_id"
-  val RawValue = "raw"
+  val Value = "value"
+  val ValueAutocomplete = "value.autocomplete"
   val Stage = "stage"
   val Suggest = "suggest"
 }

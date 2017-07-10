@@ -25,9 +25,11 @@ import com.socrata.spandex.common.client.{ColumnMap, DatasetCopy, FieldValue, Te
 class DatasetLifecycleSimulation extends FunSuiteLike with Matchers {
   val config = new SpandexConfig(ConfigFactory.load().getConfig("com.socrata.spandex")
     .withValue("elastic-search.index", ConfigValueFactory.fromAnyRef("spandex-dataset-lifecycle")))
-  val client = new TestESClient(config.es)
 
-  lazy val secondary = new TestSpandexSecondary(config.es, client)
+  val indexName = getClass.getSimpleName.toLowerCase
+  val client = new TestESClient(indexName)
+
+  val secondary = new TestSpandexSecondary(config.es, client)
 
   test("Entire lifecycle of a dataset") {
     val dataset = DatasetInfo(

@@ -24,11 +24,11 @@ trait ElasticsearchClientLogger extends Logging {
   def logIndexExistsResult(index: String, result: Boolean): Unit =
     logger.debug(s"index '$index' exists was '$result'")
 
-  def logIndexCreateRequest(index: String, clusterName: String): Unit =
-    logger.info(s"creating index $index on $clusterName")
+  def logIndexCreateRequest(index: String): Unit =
+    logger.info(s"creating index $index")
 
-  def logIndexAlreadyExists(index: String, clusterName: String): Unit =
-    logger.info(s"actually that index ($index) already exists on cluster ($clusterName)")
+  def logIndexAlreadyExists(index: String): Unit =
+    logger.info(s"actually that index ($index) already exists")
 
   def logBulkRequest(request: BulkRequestBuilder, refresh: Boolean): Unit =
     logger.debug(s"sending bulk request of size ${request.numberOfActions} with refresh=$refresh")

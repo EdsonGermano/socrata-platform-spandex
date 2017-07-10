@@ -4,28 +4,22 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.io.Source
 
-import com.rojoma.json.v3.ast.JValue
-import com.rojoma.json.v3.io.JsonReader
 import com.rojoma.json.v3.util.JsonUtil
 import com.socrata.datacoordinator.secondary._
 import org.elasticsearch.ElasticsearchException
 import org.elasticsearch.action.ActionResponse
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest
-import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsRequest
 import org.elasticsearch.action.bulk.BulkResponse
 import org.elasticsearch.action.delete.{DeleteRequestBuilder, DeleteResponse}
 import org.elasticsearch.action.index.{IndexRequestBuilder, IndexResponse}
 import org.elasticsearch.action.support.WriteRequest.RefreshPolicy
 import org.elasticsearch.action.update.{UpdateRequestBuilder, UpdateResponse}
-import org.elasticsearch.common.unit.{Fuzziness, TimeValue}
-import org.elasticsearch.common.xcontent.{ToXContent, XContentType}
+import org.elasticsearch.common.unit.TimeValue
+import org.elasticsearch.common.xcontent.XContentType
 import org.elasticsearch.index.query.QueryBuilder
 import org.elasticsearch.rest.RestStatus.{CREATED, OK}
 import org.elasticsearch.search.aggregations.AggregationBuilders.max
 import org.elasticsearch.search.sort.{FieldSortBuilder, SortOrder}
-import org.elasticsearch.search.suggest.completion.FuzzyOptions
-import org.elasticsearch.search.suggest.completion.context.CategoryQueryContext
-import org.elasticsearch.search.suggest.{Suggest, SuggestBuilder, SuggestBuilders}
 
 import com.socrata.spandex.common.{ElasticSearchConfig, ElasticsearchClientLogger}
 import com.socrata.spandex.common.client.ResponseExtensions._
@@ -123,7 +117,7 @@ class SpandexElasticSearchClient(
     deleteByQuery(byCopyNumberQuery(datasetId, copyNumber), Seq(ColumnMapType))
 
   def indexFieldValue(fieldValue: FieldValue, refresh: Boolean): Boolean = {
-    if (fieldValue.worthIndexing) {
+    if (fieldValue.isNonEmpty) {
       checkForFailures(fieldValueIndexRequest(fieldValue).setRefreshPolicy(refreshPolicy(refresh)).execute.actionGet)
       true
     } else {
@@ -237,7 +231,7 @@ class SpandexElasticSearchClient(
 
     do {
       val batch = response.results[FieldValue].thisPage.map { src =>
-        fieldValueIndexRequest(FieldValue(src.datasetId, to.copyNumber, src.columnId, src.rowId, src.rawValue))
+        fieldValueIndexRequest(FieldValue(src.datasetId, to.copyNumber, src.columnId, src.rowId, src.value))
       }
 
       if (batch.nonEmpty) {
@@ -295,7 +289,7 @@ class SpandexElasticSearchClient(
 
   def datasetCopyLatest(datasetId: String, stage: Option[Stage] = None): Option[DatasetCopy] = {
     val latestCopyPlaceholder = "latest_copy"
-    val query = datasetIdAndOptionalStageQuery(datasetId, stage)
+    val query = byDatasetIdAndOptionalStageQuery(datasetId, stage)
 
     val request = client.prepareSearch(indexName)
       .setTypes(DatasetCopyType)
@@ -312,7 +306,7 @@ class SpandexElasticSearchClient(
   }
 
   def datasetCopiesByStage(datasetId: String, stage: Stage): List[DatasetCopy] = {
-    val query = datasetIdAndOptionalStageQuery(datasetId, Some(stage))
+    val query = byDatasetIdAndOptionalStageQuery(datasetId, Some(stage))
 
     val countRequest = client.prepareSearch(indexName)
       .setSize(0)
@@ -353,26 +347,16 @@ class SpandexElasticSearchClient(
   def deleteDatasetById(datasetId: String): Map[String, Int] =
     deleteByQuery(byDatasetIdQuery(datasetId), allTypes)
 
-  def suggest(column: ColumnMap, size: Int, text: String,
-              fuzz: Fuzziness, fuzzLength: Int, fuzzPrefix: Int): Suggest = {
-
-    val categoryContext = List(CategoryQueryContext.builder().setCategory(column.compositeId).build()).asJava
-    val categoryMap = new java.util.HashMap[String, java.util.List[_ <: ToXContent]]()
-    categoryMap.put(SpandexFields.CompositeId, categoryContext)
-    val contexts: java.util.Map[String, java.util.List[_ <: ToXContent]] = categoryMap
-    val fuzzOptions = FuzzyOptions.builder()
-      .setFuzziness(fuzz)
-      .setFuzzyMinLength(fuzzLength)
-      .setFuzzyPrefixLength(fuzzPrefix)
-      .build()
-    val suggestion = SuggestBuilders.completionSuggestion(SpandexFields.Suggest)
-      .prefix(text, fuzzOptions)
-      .size(size)
-      .contexts(contexts)
-
+  def suggest(column: ColumnMap, size: Int, text: String): SearchResults[FieldValue] = {
+    val fieldValue = if (text.length > 0) Some(text) else None
     val request = client.prepareSearch(indexName)
-      .suggest(new SuggestBuilder().addSuggestion(SpandexFields.Suggest, suggestion))
-    request.execute.actionGet.getSuggest
+      .setSize(0)
+      .setTypes(FieldValueType)
+      .setQuery(byFieldValueAutocompleteAndCompositeIdQuery(fieldValue, column))
+      .addAggregation(fieldValueTermsAggregation(size, orderByScore=fieldValue.isDefined))
+
+    val aggKey = "values"
+    request.execute.actionGet.results(aggKey)
   }
 }
 
@@ -402,13 +386,12 @@ object SpandexElasticSearchClient extends ElasticsearchClientLogger {
 
   def ensureIndex(
       index: String,
-      clusterName: String,
       esClient: SpandexElasticSearchClient):
       Unit = {
 
     if (!esClient.indexExists) {
        try {
-         logIndexCreateRequest(index, clusterName)
+         logIndexCreateRequest(index)
 
          esClient.client.admin.indices.prepareCreate(index)
            .setSettings(readSettings, XContentType.JSON)
@@ -431,7 +414,7 @@ object SpandexElasticSearchClient extends ElasticsearchClientLogger {
        } catch {
          // TODO: more error handling
          case e: ElasticsearchException =>
-           logIndexAlreadyExists(index, clusterName)
+           logIndexAlreadyExists(index)
        }
     }
   }

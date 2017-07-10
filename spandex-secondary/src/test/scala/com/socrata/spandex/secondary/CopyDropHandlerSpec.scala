@@ -4,7 +4,7 @@ import org.scalatest.prop.PropertyChecks
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FunSuiteLike, Matchers}
 import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
 import com.socrata.datacoordinator.secondary.LifecycleStage
-import com.socrata.spandex.common.{SpandexConfig, TestESData}
+import com.socrata.spandex.common.TestESData
 import com.socrata.spandex.common.client._
 
 class CopyDropHandlerSpec extends FunSuiteLike
@@ -13,9 +13,9 @@ class CopyDropHandlerSpec extends FunSuiteLike
   with BeforeAndAfterEach
   with PropertyChecks
   with TestESData {
-  val config = new SpandexConfig(ConfigFactory.load().getConfig("com.socrata.spandex")
-    .withValue("elastic-search.index", ConfigValueFactory.fromAnyRef("spandex-dataset-versioneventshandler")))
-  val client = new TestESClient(config.es)
+
+  val indexName = getClass.getSimpleName.toLowerCase
+  val client = new TestESClient(indexName)
 
   override def copies(dataset: String): Seq[DatasetCopy] = {
     val snapshot    = DatasetCopy(dataset, 1, 5, LifecycleStage.Snapshotted) // scalastyle:ignore magic.number
@@ -28,8 +28,7 @@ class CopyDropHandlerSpec extends FunSuiteLike
   // Make batches teensy weensy to expose any batching issues
   val handler = new VersionEventsHandler(client, 2)
 
-  override protected def beforeAll(): Unit =
-    SpandexElasticSearchClient.ensureIndex(config.es.index, config.es.clusterName, client)
+  override protected def beforeAll(): Unit = SpandexElasticSearchClient.ensureIndex(indexName, client)
 
   override def beforeEach(): Unit = {
     client.deleteAllDatasetCopies()

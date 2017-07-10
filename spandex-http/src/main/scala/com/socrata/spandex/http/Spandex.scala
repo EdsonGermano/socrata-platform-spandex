@@ -20,8 +20,6 @@ object Spandex extends App {
   //        Core/NBE model where any changes to the underlying
   //        store have to be manually executed via a migration.
   // SpandexBootstrap.ensureIndex(conf, conf.es.port)
-  CompletionAnalyzer.configure(conf.analysis)
-
   val port = conf.spandexPort
   val pathRoot = "/"
 

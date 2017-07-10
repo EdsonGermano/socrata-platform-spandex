@@ -1,0 +1,64 @@
+#!/bin/bash
+
+#
+# Example usage:
+#
+#   bin/reindex http://spandex.elasticsearch.aws-us-west-2-staging.socrata.net:80 spandex-v1.1-diet spandex-20170714
+#
+
+set -e
+
+SOURCE_HOST="$1"
+
+SRC_INDEX_NAME="$2"
+DST_INDEX_NAME="$3"
+
+declare -a datatypes=("dataset_copy", "column_map")
+
+for datatype in "${datatypes[@]}"; do
+    echo "Reindexing documents of type $datatype..."
+
+    jq -n \
+       --arg datatype "$datatype" \
+       --arg src_host "$SOURCE_HOST" \
+       --arg src_index_name "$SRC_INDEX_NAME" \
+       --arg dst_index_name "$DST_INDEX_NAME" \
+       '{
+          "conflicts": "proceed",
+          "source": {
+            "remote": {"host": $src_host},
+            "index": $src_index_name,
+            "size": 1000,
+            "type": $datatype
+          },
+          "dest": {
+            "index": $dst_index_name,
+            "op_type": "create"
+          }
+        }' | curl -XPOST localhost:9200/_reindex -d @-
+done
+
+echo "Reindexing documents of type field_value..."
+
+jq -n \
+   --arg src_host "$SOURCE_HOST" \
+   --arg src_index_name "$SRC_INDEX_NAME" \
+   --arg dst_index_name "$DST_INDEX_NAME" \
+   '{
+      "conflicts": "proceed",
+      "source": {
+        "remote": {"host": $src_host},
+        "index": $src_index_name,
+        "size": 1000,
+        "type": "field_value"
+      },
+      "dest": {
+        "index": $dst_index_name,
+        "op_type": "create"
+      },
+      "script": {
+        "inline": "if (ctx._source.containsKey(\"value\") && ctx._source.value.containsKey(\"output\")) { String v = ctx._source.value.output; ctx._source.remove(\"value\"); ctx._source.value = v; }"
+      }
+    }' | curl -XPOST localhost:9200/_reindex -d @-
+
+echo "Done reindexing"

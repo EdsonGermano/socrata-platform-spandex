@@ -25,7 +25,6 @@ trait TestESData {
       FieldValue(col.datasetId, col.copyNumber, col.systemColumnId, row, makeRowData(col.systemColumnId, row))
     )
 
-  def config: SpandexConfig
   def client: SpandexElasticSearchClient
 
   def bootstrapData(): Unit = {

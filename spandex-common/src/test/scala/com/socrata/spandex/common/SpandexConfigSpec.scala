@@ -1,15 +1,11 @@
 package com.socrata.spandex.common
 
-import org.elasticsearch.common.unit.Fuzziness
 import org.scalatest.{FunSuiteLike, Matchers}
 
 class SpandexConfigSpec extends FunSuiteLike with Matchers {
   test("spandex config has these required values") {
     val conf = new SpandexConfig
     Some(conf.spandexPort) should be ('defined)
-    Some(conf.suggestFuzziness) should be ('defined)
-    Some(conf.suggestFuzzLength) should be ('defined)
-    Some(conf.suggestFuzzPrefix) should be ('defined)
     Some(conf.suggestSize) should be ('defined)
   }
 
@@ -21,12 +17,5 @@ class SpandexConfigSpec extends FunSuiteLike with Matchers {
     Some(conf.index) should be ('defined)
     Some(conf.dataCopyBatchSize) should be ('defined)
     Some(conf.dataCopyTimeout) should be ('defined)
-  }
-
-  test("config fuzziness acceptable values") {
-    Fuzziness.build("AUTO") should be (Fuzziness.AUTO)
-    Fuzziness.build("0") should be (Fuzziness.ZERO)
-    Fuzziness.build("1") should be (Fuzziness.ONE)
-    Fuzziness.build("2") should be (Fuzziness.TWO)
   }
 }

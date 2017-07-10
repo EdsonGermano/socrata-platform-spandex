@@ -6,7 +6,7 @@ ENVIRONMENT="$1"
 INDEX_NAME="$2"
 ALIAS_NAME="$3"
 
-if [[ "$ENVIRONMENT" == "" || "$INDEX_NAME" == "" || "$ALIAS_NAME" == ""]]; then
+if [[ "$ENVIRONMENT" == "" ]] || [[ "$INDEX_NAME" == "" ]] || [[ "$ALIAS_NAME" == "" ]]; then
     echo "Usage: create_index_alias <ENVIRONMENT> <INDEX_NAME> <ALIAS_NAME>"
     exit 1
 fi
