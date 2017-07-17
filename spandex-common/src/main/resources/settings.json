@@ -5,7 +5,7 @@
         "autocomplete": {
           "type": "custom",
           "tokenizer": "word",
-          "filter": ["lowercase", "autocomplete_edge_ngram"]
+          "filter": ["lowercase", "ascii_folding", "autocomplete_edge_ngram", "unique_token"]
         },
         "case_insensitive_word": {
           "tokenizer": "word",
@@ -13,10 +13,18 @@
         }
       },
       "filter": {
+        "ascii_folding": {
+          "type": "asciifolding",
+          "preserve_original": true
+        },
         "autocomplete_edge_ngram": {
           "type": "edge_ngram",
           "min_gram": 1,
           "max_gram": 20
+        },
+        "unique_token": {
+          "type": "unique",
+          "only_on_same_position": true
         }
       },
       "tokenizer": {

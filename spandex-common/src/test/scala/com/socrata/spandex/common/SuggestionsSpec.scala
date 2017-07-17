@@ -132,4 +132,10 @@ class SuggestionsSpec extends FunSuiteLike with Matchers with AnalyzerTest with 
     index(value)
     suggest(".") should be('empty)
   }
+
+  test("suggest returns the expected field values when the values contain accented characters") {
+    val value = "la mémoire d'éléphant"
+    index(value)
+    suggest("elephant") should contain(value)
+  }
 }
