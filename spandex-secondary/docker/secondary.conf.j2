@@ -2,11 +2,6 @@ instances.{{ SPANDEX_SECONDARY_TYPE }} {
   secondaryType = spandex
   numWorkers = {{ SPANDEX_SECONDARY_NUM_WORKERS }}
 
-  config.analysis {
-    max-input-length = {{ SPANDEX_SECONDARY_ANALYSIS_MAX_INPUT_LENGTH }}
-    max-shingle-length = {{ SPANDEX_SECONDARY_ANALYSIS_MAX_SHINGLE_LENGTH }}
-  }
-
   config.elastic-search {
     host = "{{ SPANDEX_SECONDARY_ES_HOST }}"
     port = "{{ SPANDEX_SECONDARY_ES_PORT }}"
