@@ -41,8 +41,8 @@ curl -s -o /dev/null -XPUT "http://$ES_CLUSTER_URL/$INDEX_NAME" -d @settings_ful
 
 echo "Creating mappings..."
 curl -XPUT "http://$ES_CLUSTER_URL/$INDEX_NAME/_mapping/dataset_copy" --data-binary @$HERE/spandex-common/src/main/resources/mapping.dataset_copy.json
-curl -XPUT "http://$ES_CLUSTER_URL/$INDEX_NAME/_mapping/column_map" --data-binary @$HERE/spandex-common/src/main/resources/mapping.column_map.json
-curl -XPUT "http://$ES_CLUSTER_URL/$INDEX_NAME/_mapping/field_value" --data-binary @$HERE/spandex-common/src/main/resources/mapping.field_value.json
+curl -XPUT "http://$ES_CLUSTER_URL/$INDEX_NAME/_mapping/column" --data-binary @$HERE/spandex-common/src/main/resources/mapping.column.json
+curl -XPUT "http://$ES_CLUSTER_URL/$INDEX_NAME/_mapping/column_value" --data-binary @$HERE/spandex-common/src/main/resources/mapping.column_value.json
 
 if [[ $ENVIRONMENT == "local" ]]; then
     status=$(curl -s -XGET http://$ES_CLUSTER_URL/spandex/_aliases | jq '.status')

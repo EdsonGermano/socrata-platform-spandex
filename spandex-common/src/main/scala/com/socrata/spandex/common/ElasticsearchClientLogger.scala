@@ -1,22 +1,32 @@
 package com.socrata.spandex.common
 
 import com.typesafe.scalalogging.slf4j.Logging
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest
 import org.elasticsearch.action.bulk.BulkRequestBuilder
 import org.elasticsearch.action.search.{SearchRequestBuilder, SearchResponse}
 import org.elasticsearch.common.settings.Settings
 import org.elasticsearch.common.transport.InetSocketTransportAddress
 import org.elasticsearch.index.query.QueryBuilder
 
-import com.socrata.spandex.common.client.{DatasetCopy, SearchResults}
+import com.socrata.spandex.common.client.{DatasetCopy, SpandexElasticSearchClient, SearchResults}
 
 trait ElasticsearchClientLogger extends Logging {
+  this: SpandexElasticSearchClient =>
+
   def queryToString(req: Any): String = req.toString.replaceAll("\\s+", " ")
 
-  def logClientConnected(transportAddress: InetSocketTransportAddress, settings: Settings): Unit =
-    logger.debug(s"connected elasticsearch client at $transportAddress with ${settings.toDelimitedString(',')}")
+  def logClientConnected(): Unit = {
+    val response = client.admin().cluster().health(new ClusterHealthRequest()).actionGet()
+    val clusterName = response.getClusterName
+    val settings = client.settings().toDelimitedString(',')
 
-  def logClientHealthcheckStatus(status: String): Unit =
+    logger.debug(s"connected elasticsearch client to cluster $clusterName with $settings")
+  }
+
+  def logClientHealthCheckStatus(): Unit = {
+    val status = client.admin().cluster().prepareHealth().get().toString
     logger.debug(s"elasticsearch cluster healthcheck $status")
+  }
 
   def logIndexExistsRequest(index: String): Unit =
     logger.debug(s"does index '$index' exist?")
@@ -43,8 +53,8 @@ trait ElasticsearchClientLogger extends Logging {
   def logSearchScrollRequest(scrollId: String, timeout: String): Unit =
     logger.trace(s"search scroll request id=$scrollId timeout=$timeout")
 
-  def logCopyFieldValuesRequest(from: DatasetCopy, to: DatasetCopy, refresh: Boolean): Unit =
-    logger.debug(s"copy field_values from=$from to=$to refresh=$refresh")
+  def logCopyColumnValuesRequest(from: DatasetCopy, to: DatasetCopy, refresh: Boolean): Unit =
+    logger.debug(s"copy column_values from=$from to=$to refresh=$refresh")
 
   def logDatasetCopyIndexRequest(id: String, source: String): Unit =
     logger.debug(s"executing index dataset copy on id=$id with $source")

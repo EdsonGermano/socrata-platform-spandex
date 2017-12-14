@@ -5,6 +5,7 @@ object SpandexFields {
   val CopyNumber = "copy_number"
   val CompositeId = "composite_id"
   val ColumnId = "column_id"
+  val Count = "count"
   val UserColumnId = "user_column_id"
   val RowId = "row_id"
   val Value = "value"

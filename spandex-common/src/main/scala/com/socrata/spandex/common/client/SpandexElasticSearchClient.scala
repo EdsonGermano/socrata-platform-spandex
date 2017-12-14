@@ -1,7 +1,10 @@
 package com.socrata.spandex.common.client
 
 import scala.collection.mutable
+import scala.collection.JavaConverters._
 import scala.io.Source
+import java.io.Closeable
+import java.net.InetAddress
 
 import com.rojoma.json.v3.util.JsonUtil
 import com.socrata.datacoordinator.secondary._
@@ -13,41 +16,75 @@ import org.elasticsearch.action.delete.{DeleteRequestBuilder, DeleteResponse}
 import org.elasticsearch.action.index.{IndexRequestBuilder, IndexResponse}
 import org.elasticsearch.action.support.WriteRequest.RefreshPolicy
 import org.elasticsearch.action.update.{UpdateRequestBuilder, UpdateResponse}
+import org.elasticsearch.client.Client
+import org.elasticsearch.client.RestClientBuilder
+import org.elasticsearch.client.RestClient
+import org.elasticsearch.common.settings.Settings
+import org.elasticsearch.common.transport.InetSocketTransportAddress
 import org.elasticsearch.common.unit.TimeValue
 import org.elasticsearch.common.xcontent.XContentType
 import org.elasticsearch.index.query.QueryBuilder
 import org.elasticsearch.rest.RestStatus.{CREATED, OK}
+import org.elasticsearch.script.{Script, ScriptType}
 import org.elasticsearch.search.aggregations.AggregationBuilders.max
 import org.elasticsearch.search.sort.{FieldSortBuilder, SortOrder}
+import org.elasticsearch.transport.client.PreBuiltTransportClient
 
 import com.socrata.spandex.common.{ElasticSearchConfig, ElasticsearchClientLogger}
 import com.socrata.spandex.common.client.ResponseExtensions._
 import com.socrata.spandex.common.client.Queries._
+import SpandexElasticSearchClient.{DatasetCopyType, ColumnType, ColumnValueType}
 
 // scalastyle:off number.of.methods
 case class ElasticSearchResponseFailed(msg: String) extends Exception(msg)
 
-// Setting refresh to true on ES write calls, because we always want to be
-// sure that we're operating on the very latest copy. We are trading off some speed to get
-// consistency.
-// Without this, when we create a new working copy, more often than not the brand new
-// dataset_copy document isn't indexed yet, and we perform all subsequent event operations
-// on a stale copy.
-// Caveats:
-// - refresh=true only guarantees consistency on a single shard.
-// - We aren't actually sure what the perf implications of running like this at production scale are.
-// http://www.elastic.co/guide/en/elasticsearch/reference/1.x/docs-index_.html#index-refresh
 class SpandexElasticSearchClient(
+    val client: Client,
+    val indexName: String,
+    val dataCopyBatchSize: Int,
+    val dataCopyTimeout: Long,
+    val maxColumnValueLength: Int)
+  extends Closeable
+  with ElasticsearchClientLogger {
+
+  def this(
     host: String,
     port: Int,
     clusterName: String,
     indexName: String,
     dataCopyBatchSize: Int,
-    dataCopyTimeout: Long)
-  extends ElasticSearchClient(host, port, clusterName) {
+    dataCopyTimeout: Long,
+    maxColumnValueLength: Int
+  ) = {
+    this(
+      new PreBuiltTransportClient(
+        Settings.builder().put("cluster.name", clusterName).put("client.transport.sniff", true).build()
+      ).addTransportAddress(
+        new InetSocketTransportAddress(InetAddress.getByName(host), port)
+      ),
+      indexName,
+      dataCopyBatchSize,
+      dataCopyTimeout,
+      maxColumnValueLength
+    )
+  }
 
-  // scalastyle:ignore import.grouping
-  import SpandexElasticSearchClient._
+  def this(config: ElasticSearchConfig) = {
+    this(
+      config.host,
+      config.port,
+      config.clusterName,
+      config.index,
+      config.dataCopyBatchSize,
+      config.dataCopyTimeout,
+      config.maxColumnValueLength
+    )
+  }
+
+  logClientConnected()
+  logClientHealthCheckStatus()
+
+  def close(): Unit = client.close()
 
   private[this] def checkForFailures(response: ActionResponse): Unit = response match {
     case i: IndexResponse =>
@@ -67,9 +104,11 @@ class SpandexElasticSearchClient(
       throw new NotImplementedError(s"Haven't implemented failure check for ${response.getClass.getSimpleName}")
   }
 
-  def refreshPolicy(refresh: Boolean): RefreshPolicy = if (refresh) RefreshPolicy.IMMEDIATE else RefreshPolicy.NONE
+  def refreshPolicy(refresh: Boolean): RefreshPolicy =
+    if (refresh) RefreshPolicy.IMMEDIATE else RefreshPolicy.NONE
 
-  def refresh(): Unit = client.admin().indices().prepareRefresh(indexName).execute.actionGet
+  def refresh(): Unit =
+    client.admin().indices().prepareRefresh(indexName).execute.actionGet
 
   def indexExists: Boolean = {
     logIndexExistsRequest(indexName)
@@ -79,9 +118,9 @@ class SpandexElasticSearchClient(
     result
   }
 
-  def putColumnMap(columnMap: ColumnMap, refresh: Boolean): Unit = {
+  def putColumnMap(columnMap: ColumnMap, refresh: Boolean = false): Unit = {
     val source = JsonUtil.renderJson(columnMap)
-    val request = client.prepareIndex(indexName, ColumnMapType, columnMap.docId)
+    val request = client.prepareIndex(indexName, ColumnType, columnMap.docId)
       .setSource(source, XContentType.JSON)
       .setRefreshPolicy(refreshPolicy(refresh))
     logColumnMapIndexRequest(columnMap.docId, source)
@@ -89,15 +128,15 @@ class SpandexElasticSearchClient(
     checkForFailures(response)
   }
 
-  def columnMap(datasetId: String, copyNumber: Long, userColumnId: String): Option[ColumnMap] = {
+  def fetchColumnMap(datasetId: String, copyNumber: Long, userColumnId: String): Option[ColumnMap] = {
     val id = ColumnMap.makeDocId(datasetId, copyNumber, userColumnId)
-    val response = client.prepareGet(indexName, ColumnMapType, id).execute.actionGet
+    val response = client.prepareGet(indexName, ColumnType, id).execute.actionGet
     response.result[ColumnMap]
   }
 
-  def deleteColumnMap(datasetId: String, copyNumber: Long, userColumnId: String, refresh: Boolean): Unit = {
+  def deleteColumnMap(datasetId: String, copyNumber: Long, userColumnId: String, refresh: Boolean = false): Unit = {
     val id = ColumnMap.makeDocId(datasetId, copyNumber, userColumnId)
-    val delete = client.prepareDelete(indexName, ColumnMapType, id)
+    val delete = client.prepareDelete(indexName, ColumnType, id)
 
     if (refresh) {
       delete.setRefreshPolicy(refreshPolicy(true))
@@ -106,53 +145,96 @@ class SpandexElasticSearchClient(
     checkForFailures(delete.execute.actionGet)
   }
 
-  def deleteColumnMapsByDataset(datasetId: String, refresh: Boolean): Unit =
-    deleteByQuery(byDatasetIdQuery(datasetId), Seq(ColumnMapType), refresh)
+  def deleteColumnMapsByDataset(datasetId: String, refresh: Boolean = false): Unit =
+    deleteByQuery(byDatasetIdQuery(datasetId), Seq(ColumnType), refresh)
 
   // We don't expect the number of column maps to exceed dataCopyBatchSize.
   // As of April 2015 the widest dataset is ~1000 cols wide.
   def searchLotsOfColumnMapsByCopyNumber(datasetId: String, copyNumber: Long): SearchResults[ColumnMap] =
     client.prepareSearch(indexName)
-      .setTypes(ColumnMapType)
+      .setTypes(ColumnType)
       .setQuery(byCopyNumberQuery(datasetId, copyNumber))
       .setSize(dataCopyBatchSize)
-      .execute.actionGet.results[ColumnMap]
+      .execute.actionGet.results[ColumnMap]()
 
-  def deleteColumnMapsByCopyNumber(datasetId: String, copyNumber: Long, refresh: Boolean): Unit =
-    deleteByQuery(byCopyNumberQuery(datasetId, copyNumber), Seq(ColumnMapType), refresh)
+  def deleteColumnMapsByCopyNumber(datasetId: String, copyNumber: Long, refresh: Boolean = false): Unit =
+    deleteByQuery(byCopyNumberQuery(datasetId, copyNumber), Seq(ColumnType), refresh)
 
-  def indexFieldValue(fieldValue: FieldValue, refresh: Boolean): Boolean = {
-    if (fieldValue.isNonEmpty) {
-      checkForFailures(fieldValueIndexRequest(fieldValue).setRefreshPolicy(refreshPolicy(refresh)).execute.actionGet)
-      true
-    } else {
-      false
+  def columnValueUpsertRequest(columnValue: ColumnValue): UpdateRequestBuilder = {
+    val script = new Script(
+      ScriptType.INLINE,
+      "painless",
+      "ctx._source.count += params.count",
+      Map("count" -> columnValue.count.asInstanceOf[Object]).asJava)
+
+    client.prepareUpdate(indexName, ColumnValueType, columnValue.docId)
+      .setScript(script)
+      .setUpsert(JsonUtil.renderJson(columnValue.truncate(maxColumnValueLength)), XContentType.JSON)
+  }
+
+  def indexColumnValues(columnValues: Seq[ColumnValue], refresh: Boolean = false): Unit =
+    sendBulkRequest(
+      columnValues.collect {
+        case cv: ColumnValue if cv.isNonEmpty =>
+          columnValueUpsertRequest(cv)
+      }, refresh
+    )
+
+  def putColumnValues(datasetId: String, copyNumber: Long, columnValues: Seq[ColumnValue]): Unit = {
+    indexColumnValues(columnValues, refresh = true)
+    deleteNonPositiveCountColumnValues(datasetId, copyNumber, refresh = true)
+  }
+
+  def columnValueIndexRequest(columnValue: ColumnValue): IndexRequestBuilder =
+    client.prepareIndex(indexName, ColumnValueType, columnValue.docId)
+      .setSource(JsonUtil.renderJson(columnValue.truncate(maxColumnValueLength)), XContentType.JSON)
+
+  def copyColumnValues(from: DatasetCopy, to: DatasetCopy, refresh: Boolean): Unit = {
+    logCopyColumnValuesRequest(from, to, refresh)
+    val timeout = new TimeValue(dataCopyTimeout)
+    val request = client.prepareSearch(indexName)
+      .addSort(FieldSortBuilder.DOC_FIELD_NAME, SortOrder.ASC)
+      .setTypes(ColumnValueType)
+      .setQuery(byCopyNumberQuery(from.datasetId, from.copyNumber))
+      .setScroll(timeout)
+      .setSize(calculateScrollSize(dataCopyBatchSize))
+
+    logSearchRequest(request, Seq(ColumnValueType))
+    var response = request.execute.actionGet
+
+    do {
+      val batch = response.results[ColumnValue]().thisPage.map { case ScoredResult(src, _) =>
+        columnValueIndexRequest(ColumnValue(src.datasetId, to.copyNumber, src.columnId, src.value, src.count))
+      }
+
+      if (batch.nonEmpty) {
+        sendBulkRequest(batch, refresh = false)
+      }
+      response = client.prepareSearchScroll(response.getScrollId)
+        .setScroll(timeout).execute.actionGet
+      logSearchResponse(response)
+    } while (response.getHits().getHits().length != 0)
+
+    // TODO : Guarantee refresh before read instead of after write
+    if (refresh) {
+      this.refresh()
     }
   }
 
-  def fieldValueIndexRequest(fieldValue: FieldValue): IndexRequestBuilder =
-    client.prepareIndex(indexName, FieldValueType, fieldValue.docId)
-      .setSource(JsonUtil.renderJson(fieldValue), XContentType.JSON)
+  def deleteColumnValuesByDataset(datasetId: String, refresh: Boolean): Unit =
+    deleteByQuery(byDatasetIdQuery(datasetId), Seq(ColumnValueType), refresh)
 
-  def fieldValueUpdateRequest(fieldValue: FieldValue): UpdateRequestBuilder = {
-    client.prepareUpdate(indexName, FieldValueType, fieldValue.docId)
-      .setDoc(JsonUtil.renderJson(fieldValue), XContentType.JSON)
-      .setUpsert()
-  }
+  def deleteColumnValuesByCopyNumber(datasetId: String, copyNumber: Long, refresh: Boolean): Unit =
+    deleteByQuery(byCopyNumberQuery(datasetId, copyNumber), Seq(ColumnValueType), refresh)
 
-  def fieldValueDeleteRequest(
-      datasetId: String,
-      copyNumber: Long,
-      columnId: Long,
-      rowId: Long)
-    : DeleteRequestBuilder = {
+  def deleteNonPositiveCountColumnValues(datasetId: String, copyNumber: Long, refresh: Boolean = false): Unit =
+    deleteByQuery(nonPositiveCountColumnValuesByCopyNumberQuery(datasetId, copyNumber), Seq(ColumnValueType), refresh)
 
-    val docId = FieldValue.makeDocId(datasetId, copyNumber, columnId, rowId)
-    client.prepareDelete(indexName, FieldValueType, docId)
-  }
+  def deleteColumnValuesByColumnId(datasetId: String, copyNumber: Long, columnId: Long, refresh: Boolean): Unit =
+    deleteByQuery(byColumnIdQuery(datasetId, copyNumber, columnId), Seq(ColumnValueType), refresh)
 
   // Yuk @ Seq[Any], but the number of types on ActionRequestBuilder is absurd.
-  def sendBulkRequest(requests: Seq[Any], refresh: Boolean): Option[BulkResponse] = {
+  def sendBulkRequest(requests: Seq[Any], refresh: Boolean = false): Option[BulkResponse] = {
     if (requests.nonEmpty) {
       val baseRequest = client.prepareBulk().setRefreshPolicy(refreshPolicy(refresh))
       val bulkRequest = requests.foldLeft(baseRequest) { case (bulk, single) =>
@@ -189,8 +271,8 @@ class SpandexElasticSearchClient(
   def deleteByQuery(
       queryBuilder: QueryBuilder,
       types: Seq[String] = Nil,
-      refresh: Boolean = true)
-     : Map[String, Int] = {
+      refresh: Boolean = false)
+    : Map[String, Int] = {
 
     val timeout = new TimeValue(dataCopyTimeout)
     val request = client.prepareSearch(indexName)
@@ -208,6 +290,7 @@ class SpandexElasticSearchClient(
       val batch = response.getHits.getHits.map { h =>
         client.prepareDelete(h.getIndex, h.getType, h.getId)
       }
+
       sendBulkRequest(batch, refresh = false).foreach { response =>
         resultCounts ++= response.deletions.map { case (k, v) => (k, resultCounts.getOrElse(k, 0) + v) }
       }
@@ -222,56 +305,12 @@ class SpandexElasticSearchClient(
     resultCounts.toMap
   }
 
-  def copyFieldValues(from: DatasetCopy, to: DatasetCopy, refresh: Boolean): Unit = {
-    logCopyFieldValuesRequest(from, to, refresh)
-    val timeout = new TimeValue(dataCopyTimeout)
-    val request = client.prepareSearch(indexName)
-      .addSort(FieldSortBuilder.DOC_FIELD_NAME, SortOrder.ASC)
-      .setTypes(FieldValueType)
-      .setQuery(byCopyNumberQuery(from.datasetId, from.copyNumber))
-      .setScroll(timeout)
-      .setSize(calculateScrollSize(dataCopyBatchSize))
-
-    logSearchRequest(request, Seq(FieldValueType))
-    var response = request.execute.actionGet
-
-    do {
-      val batch = response.results[FieldValue].thisPage.map { src =>
-        fieldValueIndexRequest(FieldValue(src.datasetId, to.copyNumber, src.columnId, src.rowId, src.value))
-      }
-
-      if (batch.nonEmpty) {
-        sendBulkRequest(batch, refresh = false)
-      }
-      response = client.prepareSearchScroll(response.getScrollId)
-        .setScroll(timeout).execute.actionGet
-      logSearchResponse(response)
-    } while (response.getHits().getHits().length != 0)
-
-    // TODO : Guarantee refresh before read instead of after write
-    if (refresh) {
-      this.refresh()
-    }
-  }
-
-  def deleteFieldValuesByDataset(datasetId: String, refresh: Boolean): Unit =
-    deleteByQuery(byDatasetIdQuery(datasetId), Seq(FieldValueType), refresh)
-
-  def deleteFieldValuesByCopyNumber(datasetId: String, copyNumber: Long, refresh: Boolean): Unit =
-    deleteByQuery(byCopyNumberQuery(datasetId, copyNumber), Seq(FieldValueType), refresh)
-
-  def deleteFieldValuesByRowId(datasetId: String, copyNumber: Long, rowId: Long, refresh: Boolean): Unit =
-    deleteByQuery(byRowIdQuery(datasetId, copyNumber, rowId), Seq(FieldValueType), refresh)
-
-  def deleteFieldValuesByColumnId(datasetId: String, copyNumber: Long, columnId: Long, refresh: Boolean): Unit =
-    deleteByQuery(byColumnIdQuery(datasetId, copyNumber, columnId), Seq(FieldValueType), refresh)
-
   def putDatasetCopy(
       datasetId: String,
       copyNumber: Long,
       dataVersion: Long,
       stage: LifecycleStage,
-      refresh: Boolean)
+      refresh: Boolean = false)
     : Unit = {
     val id = DatasetCopy.makeDocId(datasetId, copyNumber)
     val source = JsonUtil.renderJson(DatasetCopy(datasetId, copyNumber, dataVersion, stage))
@@ -282,7 +321,7 @@ class SpandexElasticSearchClient(
     request.execute.actionGet
   }
 
-  def updateDatasetCopyVersion(datasetCopy: DatasetCopy, refresh: Boolean): Unit = {
+  def updateDatasetCopyVersion(datasetCopy: DatasetCopy, refresh: Boolean = false): Unit = {
     val source = JsonUtil.renderJson(datasetCopy)
     val request = client.prepareUpdate(indexName, DatasetCopyType, datasetCopy.docId)
       .setDoc(source, XContentType.JSON)
@@ -306,9 +345,9 @@ class SpandexElasticSearchClient(
     logDatasetCopySearchRequest(request)
 
     val response = request.execute.actionGet
-    val results = response.results[DatasetCopy]
+    val results = response.results[DatasetCopy]()
     logDatasetCopySearchResults(results)
-    results.thisPage.headOption
+    results.thisPage.headOption.map(_.result)
   }
 
   def datasetCopiesByStage(datasetId: String, stage: Stage): List[DatasetCopy] = {
@@ -327,9 +366,9 @@ class SpandexElasticSearchClient(
       .setSize(count.getHits.totalHits.toInt)
 
     val response = request.execute.actionGet
-    val datasetCopies = response.results[DatasetCopy]
+    val datasetCopies = response.results[DatasetCopy]()
 
-    datasetCopies.thisPage.toList
+    datasetCopies.thisPage.map(_.result).toList
   }
 
   def datasetCopy(datasetId: String, copyNumber: Long): Option[DatasetCopy] = {
@@ -342,43 +381,40 @@ class SpandexElasticSearchClient(
     datasetCopy
   }
 
-  def deleteDatasetCopy(datasetId: String, copyNumber: Long, refresh: Boolean): Unit =
+  def deleteDatasetCopy(datasetId: String, copyNumber: Long, refresh: Boolean = false): Unit =
     deleteByQuery(byCopyNumberQuery(datasetId, copyNumber), Seq(DatasetCopyType), refresh)
 
-  def deleteDatasetCopiesByDataset(datasetId: String, refresh: Boolean): Unit =
+  def deleteDatasetCopiesByDataset(datasetId: String, refresh: Boolean = false): Unit =
     deleteByQuery(byDatasetIdQuery(datasetId), Seq(DatasetCopyType), refresh)
 
-  private val allTypes = Seq(DatasetCopyType, ColumnMapType, FieldValueType)
+  private val allTypes = Seq(DatasetCopyType, ColumnType, ColumnValueType)
 
-  def deleteDatasetById(datasetId: String, refresh: Boolean): Map[String, Int] =
+  def deleteDatasetById(datasetId: String, refresh: Boolean = false): Map[String, Int] =
     deleteByQuery(byDatasetIdQuery(datasetId), allTypes, refresh)
 
-  def suggest(column: ColumnMap, size: Int, text: String): SearchResults[FieldValue] = {
-    val fieldValue = if (text.length > 0) Some(text) else None
-    val request = client.prepareSearch(indexName)
-      .setSize(0)
-      .setTypes(FieldValueType)
-      .setQuery(byFieldValueAutocompleteAndCompositeIdQuery(fieldValue, column))
-      .addAggregation(fieldValueTermsAggregation(size, orderByScore=fieldValue.isDefined))
+  def suggest(column: ColumnMap, size: Int, text: String): SearchResults[ColumnValue] = {
+    val suggestText = if (text.length > 0) Some(text) else None
 
-    val aggKey = "values"
-    request.execute.actionGet.results(aggKey)
+    val query = byColumnValueAutocompleteAndCompositeIdQuery(suggestText, column)
+
+    def request = {
+      val request = client.prepareSearch(indexName)
+        .setSize(size)
+        .setTypes(ColumnValueType)
+        .setQuery(query)
+
+      if (suggestText.isEmpty) request.addSort(SpandexFields.Count, SortOrder.DESC) else request
+    }
+
+    val scoreFn = if (suggestText.isEmpty) Some((cv: ColumnValue) => cv.count.toFloat) else None
+    request.execute.actionGet.results[ColumnValue](scoreFn)
   }
 }
 
-object SpandexElasticSearchClient extends ElasticsearchClientLogger {
+object SpandexElasticSearchClient {
   val DatasetCopyType = "dataset_copy"
-  val ColumnMapType = "column_map"
-  val FieldValueType = "field_value"
-
-  def apply(config: ElasticSearchConfig): SpandexElasticSearchClient =
-    new SpandexElasticSearchClient(
-      config.host,
-      config.port,
-      config.clusterName,
-      config.index,
-      config.dataCopyBatchSize,
-      config.dataCopyTimeout)
+  val ColumnType = "column"
+  val ColumnValueType = "column_value"
 
   def readSettings(): String = {
     val stream = getClass.getClassLoader.getResourceAsStream(s"settings.json")
@@ -390,28 +426,24 @@ object SpandexElasticSearchClient extends ElasticsearchClientLogger {
     Source.fromInputStream(stream).getLines().mkString("\n")
   }
 
-  def ensureIndex(
-      index: String,
-      esClient: SpandexElasticSearchClient):
-      Unit = {
-
+  def ensureIndex(index: String, esClient: SpandexElasticSearchClient): Unit = {
     if (!esClient.indexExists) {
        try {
-         logIndexCreateRequest(index)
+         esClient.logIndexCreateRequest(index)
 
          esClient.client.admin.indices.prepareCreate(index)
            .setSettings(readSettings, XContentType.JSON)
            .execute.actionGet
 
-         // Add field_value mapping
+         // Add column_value mapping
          esClient.client.admin.indices.preparePutMapping(index)
-           .setType(FieldValueType)
-           .setSource(readMapping(FieldValueType), XContentType.JSON).execute.actionGet
+           .setType(ColumnValueType)
+           .setSource(readMapping(ColumnValueType), XContentType.JSON).execute.actionGet
 
          // Add column_map mapping
          esClient.client.admin.indices.preparePutMapping(index)
-           .setType(ColumnMapType)
-           .setSource(readMapping(ColumnMapType), XContentType.JSON).execute.actionGet
+           .setType(ColumnType)
+           .setSource(readMapping(ColumnType), XContentType.JSON).execute.actionGet
 
          // Add dataset_copy mapping
          esClient.client.admin.indices.preparePutMapping(index)
@@ -420,7 +452,7 @@ object SpandexElasticSearchClient extends ElasticsearchClientLogger {
        } catch {
          // TODO: more error handling
          case e: ElasticsearchException =>
-           logIndexAlreadyExists(index)
+           esClient.logIndexAlreadyExists(index)
        }
     }
   }

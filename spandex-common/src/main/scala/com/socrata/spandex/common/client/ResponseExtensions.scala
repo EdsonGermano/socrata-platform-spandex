@@ -1,5 +1,8 @@
 package com.socrata.spandex.common.client
 
+import org.apache.http.HttpEntity
+import org.apache.http.util.EntityUtils
+import org.elasticsearch.client.Response
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.language.implicitConversions
@@ -31,14 +34,15 @@ object DatasetCopy {
           // Account for case differences
           LifecycleStage.values.find(_.toString.toLowerCase == stage.toLowerCase) match {
             case Some(matching) => Right(matching)
-            case None           => Left(DecodeError.InvalidValue(x))
+            case None => Left(DecodeError.InvalidValue(x))
           }
-        case _              => Left(DecodeError.InvalidType(JString, x.jsonType))
+        case _ => Left(DecodeError.InvalidType(JString, x.jsonType))
       }
     }
 
     def encode(x: LifecycleStage): JValue = JString(x.toString)
   }
+
   implicit val jCodec = AutomaticJsonCodecBuilder[DatasetCopy]
 
   def makeDocId(datasetId: String, copyNumber: Long): String = s"$datasetId|$copyNumber"
@@ -57,17 +61,10 @@ case class ColumnMap(
 object ColumnMap {
   implicit val jCodec = AutomaticJsonCodecBuilder[ColumnMap]
 
-  def apply(datasetId: String,
-            copyNumber: Long,
-            columnInfo: ColumnInfo[_]): ColumnMap =
-    this(datasetId,
-         copyNumber,
-         columnInfo.systemId.underlying,
-         columnInfo.id.underlying)
+  def apply(datasetId: String, copyNumber: Long, columnInfo: ColumnInfo[_]): ColumnMap =
+    this(datasetId, copyNumber, columnInfo.systemId.underlying, columnInfo.id.underlying)
 
-  def makeDocId(datasetId: String,
-                copyNumber: Long,
-                userColumnId: String): String =
+  def makeDocId(datasetId: String, copyNumber: Long, userColumnId: String): String =
     s"$datasetId|$copyNumber|$userColumnId"
 
   def makeCompositeId(datasetId: String, copyNumber: Long, systemColumnId: Long): String =
@@ -89,49 +86,40 @@ object SuggestWithContext {
 }
 
 @JsonKeyStrategy(Strategy.Underscore)
-case class FieldValue(
-    datasetId: String,
-    copyNumber: Long,
-    columnId: Long,
-    rowId: Long,
-    value: String) {
-  val docId = FieldValue.makeDocId(datasetId, copyNumber, columnId, rowId)
-  val compositeId = FieldValue.makeCompositeId(datasetId, copyNumber, columnId)
+case class ColumnValue(datasetId: String, copyNumber: Long, columnId: Long, value: String, count: Long) {
+  val docId = ColumnValue.makeDocId(datasetId, copyNumber, columnId, value)
+  val compositeId = ColumnValue.makeCompositeId(datasetId, copyNumber, columnId)
 
-  def isNonEmpty: Boolean = value != null && value.trim.nonEmpty  // scalastyle:ignore null
+  def isNonEmpty: Boolean = value != null && value.trim.nonEmpty // scalastyle:ignore null
+  def truncate(length: Int): String = value.substring(0, length)
 }
 
-object FieldValue {
-  implicit object encode extends JsonEncode[FieldValue] { // scalastyle:ignore object.name
-    def encode(fieldValue: FieldValue): JValue =
+object ColumnValue {
+  implicit object encode extends JsonEncode[ColumnValue] { // scalastyle:ignore object.name
+    def encode(columnValue: ColumnValue): JValue =
       JObject(
         Map(
-          "column_id" -> JNumber(fieldValue.columnId),
-          "composite_id" -> JString(fieldValue.compositeId),
-          "copy_number" -> JNumber(fieldValue.copyNumber),
-          "dataset_id" -> JString(fieldValue.datasetId),
-          "row_id" -> JNumber(fieldValue.rowId),
-          "value" -> JString(fieldValue.value)
+          "column_id" -> JNumber(columnValue.columnId),
+          "composite_id" -> JString(columnValue.compositeId),
+          "copy_number" -> JNumber(columnValue.copyNumber),
+          "count" -> JNumber(columnValue.count),
+          "dataset_id" -> JString(columnValue.datasetId),
+          "value" -> JString(columnValue.value)
         ))
   }
 
-  implicit val decode = AutomaticJsonDecodeBuilder[FieldValue]
+  implicit val decode = AutomaticJsonDecodeBuilder[ColumnValue]
 
-  def makeDocId(datasetId: String, copyNumber: Long, columnId: Long, rowId: Long): String =
-    s"$datasetId|$copyNumber|$columnId|$rowId"
+  def makeDocId(datasetId: String, copyNumber: Long, columnId: Long, value: String): String =
+    s"$datasetId|$copyNumber|$columnId|${value.hashCode}"
 
   def makeCompositeId(datasetId: String, copyNumber: Long, columnId: Long): String =
     s"$datasetId|$copyNumber|$columnId"
 }
 
-@JsonKeyStrategy(Strategy.Underscore)
-case class BucketKeyVal(key: String, value: Double)
+case class ScoredResult[T](result: T, score: Float)
 
-object BucketKeyVal {
-  implicit val jCodec = AutomaticJsonCodecBuilder[BucketKeyVal]
-}
-
-case class SearchResults[T: JsonDecode](totalHits: Long, thisPage: Seq[T], aggs: Seq[BucketKeyVal])
+case class SearchResults[T: JsonDecode](totalHits: Long, thisPage: Seq[ScoredResult[T]])
 
 object ResponseExtensions {
   implicit def toExtendedResponse(response: SearchResponse): SearchResponseExtensions =
@@ -145,33 +133,19 @@ object ResponseExtensions {
 }
 
 case class SearchResponseExtensions(response: SearchResponse) {
-  def results[T : JsonDecode]: SearchResults[T] = results(None)
-
-  def results[T : JsonDecode](aggKey: String): SearchResults[T] = results(Some(aggKey))
-
-  private def bucketDocCountOrScore(bucket: Terms.Bucket): Double = {
-    val aggs = bucket.getAggregations
-    aggs.get[Max]("max_score") match {
-      case null => bucket.getDocCount.toDouble // scalastyle:ignore null
-      case maxScore: Max => maxScore.getValue
-    }
-  }
-
-  protected def results[T : JsonDecode](aggKey: Option[String]): SearchResults[T] = {
+  def results[T : JsonDecode](score: Option[(T) => Float] = None): SearchResults[T] = {
     val hits = Option(response.getHits).fold(Seq.empty[SearchHit])(_.getHits.toSeq)
-    val sources = hits.map { hit => Option(hit.getSourceAsString) }.flatten
-    val thisPage = sources.map { source => JsonUtil.parseJson[T](source).right.get }
+
+    val thisPage = hits.flatMap { hit =>
+      Option(hit.getSourceAsString).map { source =>
+        val result = JsonUtil.parseJson[T](source).right.get
+        ScoredResult(result, score.map(fn => fn(result)).getOrElse(hit.getScore))
+      }
+    }
+
     val totalHits = Option(response.getHits).fold(0L)(_.totalHits)
 
-    val aggs = aggKey.fold(Seq.empty[BucketKeyVal]) { k =>
-      // added toString. but that's not right.
-      response.getAggregations.get[Terms](k)
-        .getBuckets.asScala.map { b =>
-          BucketKeyVal(b.getKey.toString, bucketDocCountOrScore(b))
-        }.toSeq
-    }
-
-    SearchResults(totalHits, thisPage, aggs)
+    SearchResults(totalHits, thisPage)
   }
 }
 
@@ -212,4 +186,13 @@ object BulkResponseAcknowledgement {
 
 case class BulkResponseExtensions(response: BulkResponse) {
   def deletions: Map[String, Int] = BulkResponseAcknowledgement(response).deletions
+}
+
+case class DatasetConfig(
+    datasetCopy: DatasetCopy,
+    columnMap: ColumnMap,
+    pathToData: String)
+
+object DatasetConfig {
+  implicit val jCodec = AutomaticJsonCodecBuilder[ColumnMap]
 }

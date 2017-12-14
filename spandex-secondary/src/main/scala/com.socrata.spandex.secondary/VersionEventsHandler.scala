@@ -29,7 +29,7 @@ class VersionEventsHandler(client: SpandexElasticSearchClient, batchSize: Int) e
           val latestPublished = client.datasetCopyLatest(datasetName, Some(Published)).getOrElse(
             throw InvalidStateBeforeEvent(s"Could not find a published copy to copy data from"))
           logDataCopied(datasetName, latestPublished.copyNumber, latest.copyNumber)
-          client.copyFieldValues(from = latestPublished, to = latest, refresh = true)
+          client.copyColumnValues(from = latestPublished, to = latest, refresh = true)
         case RowDataUpdated(ops) =>
           RowOpsHandler(client, batchSize).go(datasetName, latest.copyNumber, ops)
         case SnapshotDropped(info) =>
@@ -46,12 +46,12 @@ class VersionEventsHandler(client: SpandexElasticSearchClient, batchSize: Int) e
           }
         case ColumnRemoved(info) =>
           logColumnRemoved(datasetName, latest.copyNumber, info.id.underlying)
-          client.deleteFieldValuesByColumnId(datasetName, latest.copyNumber, info.systemId.underlying, refresh = false)
+          client.deleteColumnValuesByColumnId(datasetName, latest.copyNumber, info.systemId.underlying, refresh = false)
           client.deleteColumnMap(datasetName, latest.copyNumber, info.id.underlying, refresh = false)
           client.refresh()
         case Truncated =>
           logTruncate(datasetName, latest.copyNumber)
-          client.deleteFieldValuesByCopyNumber(datasetName, latest.copyNumber, refresh = true)
+          client.deleteColumnValuesByCopyNumber(datasetName, latest.copyNumber, refresh = true)
         case LastModifiedChanged(lm) =>
         // TODO : Support if-modified-since one day
         case RowIdentifierSet(info) =>

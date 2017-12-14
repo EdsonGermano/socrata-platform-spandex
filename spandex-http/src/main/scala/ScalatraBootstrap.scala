@@ -10,8 +10,7 @@ import org.scalatra.metrics._
 
 class ScalatraBootstrap extends LifeCycle with MetricsBootstrap {
   val conf = new SpandexConfig
-
-  lazy val client = SpandexElasticSearchClient(conf.es)
+  val client = new SpandexElasticSearchClient(conf.es)
 
   override def init(context: ServletContext): Unit = {
     context.mountHealthCheckServlet("/health")

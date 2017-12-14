@@ -27,126 +27,126 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike
 
   override def afterEach(): Unit = removeBootstrapData()
 
-  def verifyFieldValue(fieldValue: FieldValue): Option[FieldValue] =
+  def verifyColumnValue(columnValue: ColumnValue): Option[ColumnValue] =
     client.client
-      .prepareGet(indexName, FieldValueType, fieldValue.docId)
+      .prepareGet(indexName, ColumnValueType, columnValue.docId)
       .execute.actionGet
-      .result[FieldValue]
+      .result[ColumnValue]
 
-  test("Insert, update, get field values, then delete and get again") {
+  test("Insert, update, get column values, then delete and get again") {
     val toInsert = Seq(
-      FieldValue("alpha.1337", 1, 20, 32, "axolotl"),
-      FieldValue("alpha.1337", 1, 21, 32, "amphibious"),
-      FieldValue("alpha.1337", 1, 22, 32, "Henry"))
+      ColumnValue("alpha.1337", 1, 20, "axolotl", 1L),
+      ColumnValue("alpha.1337", 1, 21, "amphibious", 1L),
+      ColumnValue("alpha.1337", 1, 22, "Henry", 1L))
 
     toInsert.foreach { fv =>
-      verifyFieldValue(fv) should not be 'defined
+      verifyColumnValue(fv) should not be 'defined
     }
 
-    val inserts = toInsert.map(client.fieldValueIndexRequest)
+    val inserts = toInsert.map(client.columnValueIndexRequest)
     client.sendBulkRequest(inserts, refresh = true)
 
     toInsert.foreach { fv =>
-      verifyFieldValue(fv) should be (Some(fv))
+      verifyColumnValue(fv) should be (Some(fv))
     }
 
     val toUpdate = Seq(
-      FieldValue("alpha.1337", 1, 20, 32, "Mexican axolotl"),
-      FieldValue("alpha.1337", 1, 22, 32, "Enrique"))
+      ColumnValue("alpha.1337", 1, 20, "axolotl", 1L),
+      ColumnValue("alpha.1337", 1, 22, "Henry", 1L))
 
-    val updates = toUpdate.map(client.fieldValueUpdateRequest)
+    val updates = toUpdate.map(client.columnValueIndexRequest)
     client.sendBulkRequest(updates, refresh = true)
 
-    verifyFieldValue(toInsert(0)).get should be (toUpdate(0))
-    verifyFieldValue(toInsert(1)).get should be (toInsert(1))
-    verifyFieldValue(toInsert(2)).get should be (toUpdate(1))
+    verifyColumnValue(toInsert(0)).get should be (toUpdate(0))
+    verifyColumnValue(toInsert(1)).get should be (toInsert(1))
+    verifyColumnValue(toInsert(2)).get should be (toUpdate(1))
 
-    val deletes = toUpdate.map(fv =>
-      client.fieldValueDeleteRequest(fv.datasetId, fv.copyNumber, fv.columnId, fv.rowId))
-    client.sendBulkRequest(deletes, refresh = true)
+    val deletes = toUpdate.map(columnValue =>
+      client.deleteColumnValuesByColumnId(
+        columnValue.datasetId, columnValue.copyNumber, columnValue.columnId, refresh = true))
 
-    verifyFieldValue(toInsert(0)) should not be 'defined
-    verifyFieldValue(toInsert(1)).get should be (toInsert(1))
-    verifyFieldValue(toInsert(2)) should not be 'defined
+    verifyColumnValue(toInsert(0)) should not be 'defined
+    verifyColumnValue(toInsert(1)).get should be (toInsert(1))
+    verifyColumnValue(toInsert(2)) should not be 'defined
   }
 
-  test("Don't send empty bulk requests to Elastic Search") {
+  test("Don't send empty bulk requests to Elasticsearch") {
     val empty = Seq.empty[IndexRequestBuilder]
     // BulkRequest.validate throws if given an empty bulk request
     client.sendBulkRequest(empty, refresh = true)
   }
 
   test("Delete field values by dataset") {
-    client.searchFieldValuesByDataset(datasets(0)).totalHits should be (45)
-    client.searchFieldValuesByDataset(datasets(1)).totalHits should be (45)
+    client.searchColumnValuesByDataset(datasets(0)).totalHits should be (45)
+    client.searchColumnValuesByDataset(datasets(1)).totalHits should be (45)
 
-    client.deleteFieldValuesByDataset(datasets(0), refresh=true)
+    client.deleteColumnValuesByDataset(datasets(0), refresh=true)
 
-    client.searchFieldValuesByDataset(datasets(0)).totalHits should be (0)
-    client.searchFieldValuesByDataset(datasets(1)).totalHits should be (45)
+    client.searchColumnValuesByDataset(datasets(0)).totalHits should be (0)
+    client.searchColumnValuesByDataset(datasets(1)).totalHits should be (45)
   }
 
   test("Delete field values by copy number") {
-    client.searchFieldValuesByCopyNumber(datasets(0), 1).totalHits should be (15)
-    client.searchFieldValuesByCopyNumber(datasets(0), 2).totalHits should be (15)
-    client.searchFieldValuesByCopyNumber(datasets(1), 1).totalHits should be (15)
-    client.searchFieldValuesByCopyNumber(datasets(1), 2).totalHits should be (15)
+    client.searchColumnValuesByCopyNumber(datasets(0), 1).totalHits should be (15)
+    client.searchColumnValuesByCopyNumber(datasets(0), 2).totalHits should be (15)
+    client.searchColumnValuesByCopyNumber(datasets(1), 1).totalHits should be (15)
+    client.searchColumnValuesByCopyNumber(datasets(1), 2).totalHits should be (15)
 
-    client.deleteFieldValuesByCopyNumber(datasets(0), 2, refresh=true)
+    client.deleteColumnValuesByCopyNumber(datasets(0), 2, refresh=true)
 
-    client.searchFieldValuesByCopyNumber(datasets(0), 1).totalHits should be (15)
-    client.searchFieldValuesByCopyNumber(datasets(0), 2).totalHits should be (0)
-    client.searchFieldValuesByCopyNumber(datasets(1), 1).totalHits should be (15)
-    client.searchFieldValuesByCopyNumber(datasets(1), 2).totalHits should be (15)
+    client.searchColumnValuesByCopyNumber(datasets(0), 1).totalHits should be (15)
+    client.searchColumnValuesByCopyNumber(datasets(0), 2).totalHits should be (0)
+    client.searchColumnValuesByCopyNumber(datasets(1), 1).totalHits should be (15)
+    client.searchColumnValuesByCopyNumber(datasets(1), 2).totalHits should be (15)
   }
 
   test("Delete field values by column") {
-    client.searchFieldValuesByColumnId(datasets(0), 1, 1).totalHits should be (5)
-    client.searchFieldValuesByColumnId(datasets(0), 2, 1).totalHits should be (5)
-    client.searchFieldValuesByColumnId(datasets(0), 2, 2).totalHits should be (5)
-    client.searchFieldValuesByColumnId(datasets(1), 2, 1).totalHits should be (5)
+    client.searchColumnValuesByColumnId(datasets(0), 1, 1).totalHits should be (5)
+    client.searchColumnValuesByColumnId(datasets(0), 2, 1).totalHits should be (5)
+    client.searchColumnValuesByColumnId(datasets(0), 2, 2).totalHits should be (5)
+    client.searchColumnValuesByColumnId(datasets(1), 2, 1).totalHits should be (5)
 
-    client.deleteFieldValuesByColumnId(datasets(0), 2, 1, refresh=true)
+    client.deleteColumnValuesByColumnId(datasets(0), 2, 1, refresh=true)
 
-    client.searchFieldValuesByColumnId(datasets(0), 1, 1).totalHits should be (5)
-    client.searchFieldValuesByColumnId(datasets(0), 2, 1).totalHits should be (0)
-    client.searchFieldValuesByColumnId(datasets(0), 2, 2).totalHits should be (5)
-    client.searchFieldValuesByColumnId(datasets(1), 2, 1).totalHits should be (5)
+    client.searchColumnValuesByColumnId(datasets(0), 1, 1).totalHits should be (5)
+    client.searchColumnValuesByColumnId(datasets(0), 2, 1).totalHits should be (0)
+    client.searchColumnValuesByColumnId(datasets(0), 2, 2).totalHits should be (5)
+    client.searchColumnValuesByColumnId(datasets(1), 2, 1).totalHits should be (5)
   }
 
-  test("Delete field values by row") {
-    client.searchFieldValuesByRowId(datasets(0), 2, 1).totalHits should be (3)
-    client.searchFieldValuesByRowId(datasets(0), 2, 2).totalHits should be (3)
-    client.searchFieldValuesByRowId(datasets(0), 1, 1).totalHits should be (3)
-    client.searchFieldValuesByRowId(datasets(1), 2, 1).totalHits should be (3)
+  // test("Delete field values by row") {
+  //   client.searchColumnValuesByRowId(datasets(0), 2, 1).totalHits should be (3)
+  //   client.searchColumnValuesByRowId(datasets(0), 2, 2).totalHits should be (3)
+  //   client.searchColumnValuesByRowId(datasets(0), 1, 1).totalHits should be (3)
+  //   client.searchColumnValuesByRowId(datasets(1), 2, 1).totalHits should be (3)
 
-    client.deleteFieldValuesByRowId(datasets(0), 2, 1, refresh=true)
+  //   client.deleteColumnValuesByRowId(datasets(0), 2, 1, refresh=true)
 
-    client.searchFieldValuesByRowId(datasets(0), 2, 1).totalHits should be (0)
-    client.searchFieldValuesByRowId(datasets(0), 2, 2).totalHits should be (3)
-    client.searchFieldValuesByRowId(datasets(0), 1, 1).totalHits should be (3)
-    client.searchFieldValuesByRowId(datasets(1), 2, 1).totalHits should be (3)
-  }
+  //   client.searchColumnValuesByRowId(datasets(0), 2, 1).totalHits should be (0)
+  //   client.searchColumnValuesByRowId(datasets(0), 2, 2).totalHits should be (3)
+  //   client.searchColumnValuesByRowId(datasets(0), 1, 1).totalHits should be (3)
+  //   client.searchColumnValuesByRowId(datasets(1), 2, 1).totalHits should be (3)
+  // }
 
-  test("Copy field values from one dataset copy to another") {
+  test("Copy column values from one dataset copy to another") {
     val from = DatasetCopy("copy-test", 1, 2, LifecycleStage.Published)
     val to = DatasetCopy("copy-test", 2, 3, LifecycleStage.Unpublished)
 
     val toCopy = for {
       col <- 1 to 10
       row <- 1 to 10
-    } yield FieldValue(from.datasetId, from.copyNumber, col, row, s"$col|$row")
+    } yield ColumnValue(from.datasetId, from.copyNumber, col, s"$col|$row", 1)
 
-    val inserts = toCopy.map(client.fieldValueIndexRequest)
+    val inserts = toCopy.map(client.columnValueUpsertRequest)
     client.sendBulkRequest(inserts, refresh = true)
 
-    client.searchFieldValuesByCopyNumber(from.datasetId, from.copyNumber).totalHits should be (100)
-    client.searchFieldValuesByCopyNumber(to.datasetId, to.copyNumber).totalHits should be (0)
+    client.searchColumnValuesByCopyNumber(from.datasetId, from.copyNumber).totalHits should be (100)
+    client.searchColumnValuesByCopyNumber(to.datasetId, to.copyNumber).totalHits should be (0)
 
-    client.copyFieldValues(from, to, refresh = true)
+    client.copyColumnValues(from, to, refresh = true)
 
-    client.searchFieldValuesByCopyNumber(from.datasetId, from.copyNumber).totalHits should be (100)
-    client.searchFieldValuesByCopyNumber(to.datasetId, to.copyNumber).totalHits should be (100)
+    client.searchColumnValuesByCopyNumber(from.datasetId, from.copyNumber).totalHits should be (100)
+    client.searchColumnValuesByCopyNumber(to.datasetId, to.copyNumber).totalHits should be (100)
   }
 
   test("Search lots of column maps by copy number") {
@@ -157,24 +157,24 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike
     client.refresh()
 
     val retrieved = client.searchLotsOfColumnMapsByCopyNumber("wide-dataset", 1)
-    retrieved.thisPage.sortBy(_.systemColumnId) should be (columns)
+    retrieved.thisPage.map(_.result).sortBy(_.systemColumnId) should be (columns)
   }
 
   test("Put, get and delete column map") {
-    client.columnMap(datasets(0), 1, "col1-1111") should not be 'defined
-    client.columnMap(datasets(0), 1, "col2-2222") should not be 'defined
+    client.fetchColumnMap(datasets(0), 1, "col1-1111") should not be 'defined
+    client.fetchColumnMap(datasets(0), 1, "col2-2222") should not be 'defined
 
     val colMap = ColumnMap(datasets(0), 1, 1, "col1-1111")
     client.putColumnMap(colMap, refresh = true)
 
-    val colMap1 = client.columnMap(datasets(0), 1, "col1-1111")
+    val colMap1 = client.fetchColumnMap(datasets(0), 1, "col1-1111")
     colMap1 should be (Some(colMap))
-    val colMap2 = client.columnMap(datasets(0), 1, "col2-2222")
+    val colMap2 = client.fetchColumnMap(datasets(0), 1, "col2-2222")
     colMap2 should not be 'defined
 
     client.deleteColumnMap(colMap.datasetId, colMap.copyNumber, colMap.userColumnId, refresh = false)
 
-    client.columnMap(datasets(0), 1, "col1-1111") should not be 'defined
+    client.fetchColumnMap(datasets(0), 1, "col1-1111") should not be 'defined
   }
 
   test("Delete column map by dataset") {
@@ -200,7 +200,7 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike
   test("Put, get, search, delete dataset copies") {
     val dsCopies = client.searchCopiesByDataset(datasets(0))
     dsCopies.totalHits should be (3)
-    dsCopies.thisPage.sortBy(_.copyNumber) should be (copies(datasets(0)))
+    dsCopies.thisPage.map(_.result).sortBy(_.copyNumber) should be (copies(datasets(0)))
 
     client.datasetCopy(datasets(0), 3) should be (Some(copies(datasets(0))(2)))
     client.datasetCopy(datasets(0), 4) should not be 'defined
@@ -269,10 +269,14 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike
     }
   }
 
-  test("Do not index empty or null field values") {
-    client.indexFieldValue(FieldValue(datasets(0), 1L, 2L, 61L, ""), refresh = true) should be(false)
-    client.indexFieldValue(FieldValue(datasets(0), 1L, 2L, 61L, " "), refresh = true) should be(false)
-    client.indexFieldValue(FieldValue(datasets(0), 1L, 2L, 61L, null), refresh = true) should be(false)
+  test("Do not index empty column values") {
+    var columnValue = ColumnValue(datasets(0), 61L, 1L, "", 1L)
+    client.putColumnValues(datasets(0), 61L, List(columnValue))
+    client.fetchColumnValue(columnValue) should be(None)
+
+    columnValue = ColumnValue(datasets(0), 61L, 1L, " ", 1L)
+    client.putColumnValues(datasets(0), 61L, List(columnValue))
+    client.fetchColumnValue(columnValue) should be(None)
   }
 
   test("Get a dataset's copies by stage") {
@@ -287,7 +291,7 @@ class SpandexElasticSearchClientSpec extends FunSuiteLike
     client.datasetCopy(datasets(0), 1) shouldBe defined
     client.refresh()
     client.deleteDatasetById(datasets(0), refresh = true) should be(
-      Map("column_map" -> 9, "dataset_copy" -> 3, "field_value" -> 45))
+      Map("column" -> 9, "dataset_copy" -> 3, "column_value" -> 45))
     client.datasetCopy(datasets(0), 1) shouldBe None
   }
 }

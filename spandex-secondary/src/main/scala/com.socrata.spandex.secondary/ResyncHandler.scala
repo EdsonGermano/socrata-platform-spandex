@@ -28,15 +28,12 @@ case class ResyncHandler(client: SpandexElasticSearchClient) extends SecondaryEv
       schema.toSeq.collect { case (id, info) if info.typ == SoQLText =>
         ColumnMap(datasetInfo.internalName, copyInfo.copyNumber, info)
       }
+
     // Don't refresh ES during resync
     textColumns.foreach(client.putColumnMap(_, refresh = false))
 
     // Add field values for text columns
     insertRows(datasetInfo, copyInfo, schema, rows, batchSize)
-
-    // TODO : Guarantee refresh before read instead of after write
-    logRefreshRequest()
-    client.refresh()
   }
 
   private[this] def insertRows(
@@ -45,29 +42,20 @@ case class ResyncHandler(client: SpandexElasticSearchClient) extends SecondaryEv
       schema: ColumnIdMap[ColumnInfo[SoQLType]],
       rows: Managed[Iterator[ColumnIdMap[SoQLValue]]],
       batchSize: Int) = {
-    // Use the system ID of each row to derive its row ID.
-    // This logic is adapted from PG Secondary code in soql-postgres-adapter
-    // store-pg/src/main/scala/com/socrata/pg/store/PGSecondary.scala#L415
-    val systemIdColumn = schema.values.find(_.isSystemPrimaryKey).get
-    def rowId(row: ColumnIdMap[SoQLValue]): RowId = {
-      val rowPk = row.get(systemIdColumn.systemId).get
-      new RowId(rowPk.asInstanceOf[SoQLID].value)
-    }
-
-    // Add field values for text columns
+    // Add column values for text columns
     for { iter <- rows } {
-      val requests =
+      val columnValues =
         for {
           row <- iter
           (id, value: SoQLText) <- row.iterator
         } yield {
-          client.fieldValueIndexRequest(RowOpsHandler.fieldValueFromDatum(
-            datasetInfo.internalName, copyInfo.copyNumber, rowId(row), (id, value)))
+          RowOpsHandler.columnValueFromDatum(
+            datasetInfo.internalName, copyInfo.copyNumber, (id, value))
         }
 
       // Don't refresh ES during resync
-      for { batch <- requests.grouped(batchSize) } {
-        client.sendBulkRequest(batch, refresh = false)
+      columnValues.grouped(batchSize).foreach { batch =>
+        client.putColumnValues(datasetInfo.internalName, copyInfo.copyNumber, batch)
       }
     }
   }

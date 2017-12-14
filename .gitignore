@@ -55,6 +55,7 @@ jrebel.lic
 .project
 
 .ensime*
+ensime.sbt
 *.sublime-*
 .cache
 

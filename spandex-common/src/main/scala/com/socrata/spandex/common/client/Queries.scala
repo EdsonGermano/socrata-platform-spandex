@@ -1,38 +1,42 @@
 package com.socrata.spandex.common.client
 
-import org.elasticsearch.index.query.QueryBuilder
+import scala.collection.JavaConverters._
+
+import org.elasticsearch.common.lucene.search.function.CombineFunction
+import org.elasticsearch.index.query.{BoolQueryBuilder, QueryBuilder, TermQueryBuilder}
 import org.elasticsearch.index.query.QueryBuilders._
-import org.elasticsearch.script.Script
-import org.elasticsearch.search.aggregations.AggregationBuilder
-import org.elasticsearch.search.aggregations.AggregationBuilders._
-import org.elasticsearch.search.aggregations.bucket.terms.Terms
+import org.elasticsearch.index.query.functionscore.FunctionScoreQueryBuilder
+import org.elasticsearch.index.query.functionscore.FunctionScoreQueryBuilder.FilterFunctionBuilder
+import org.elasticsearch.index.query.functionscore.ScoreFunctionBuilders
+import org.elasticsearch.script.{Script, ScriptType}
 
 import com.socrata.datacoordinator.secondary.LifecycleStage
 
 object Queries {
-  def byDatasetIdQuery(datasetId: String): QueryBuilder = termQuery(SpandexFields.DatasetId, datasetId)
+  def byDatasetIdQuery(datasetId: String): TermQueryBuilder =
+    termQuery(SpandexFields.DatasetId, datasetId)
 
-  def byDatasetIdAndStageQuery(datasetId: String, stage: LifecycleStage): QueryBuilder =
+  def byDatasetIdAndStageQuery(datasetId: String, stage: LifecycleStage): BoolQueryBuilder =
     boolQuery()
       .filter(termQuery(SpandexFields.DatasetId, datasetId))
       .filter(termQuery(SpandexFields.Stage, stage.toString))
 
-  def byCopyNumberQuery(datasetId: String, copyNumber: Long): QueryBuilder =
+  def byCopyNumberQuery(datasetId: String, copyNumber: Long): BoolQueryBuilder =
     boolQuery()
       .filter(termQuery(SpandexFields.DatasetId, datasetId))
       .filter(termQuery(SpandexFields.CopyNumber, copyNumber))
 
-  def byColumnIdQuery(datasetId: String, copyNumber: Long, columnId: Long): QueryBuilder =
+  def byColumnIdQuery(datasetId: String, copyNumber: Long, columnId: Long): BoolQueryBuilder =
     boolQuery()
       .filter(termQuery(SpandexFields.DatasetId, datasetId))
       .filter(termQuery(SpandexFields.CopyNumber, copyNumber))
       .filter(termQuery(SpandexFields.ColumnId, columnId))
 
-  def byCompositeIdQuery(column: ColumnMap): QueryBuilder =
+  def byCompositeIdQuery(column: ColumnMap): BoolQueryBuilder =
     boolQuery()
       .filter(termQuery(SpandexFields.CompositeId, column.compositeId))
 
-  def byRowIdQuery(datasetId: String, copyNumber: Long, rowId: Long): QueryBuilder =
+  def byRowIdQuery(datasetId: String, copyNumber: Long, rowId: Long): BoolQueryBuilder =
     boolQuery()
       .filter(termQuery(SpandexFields.DatasetId, datasetId))
       .filter(termQuery(SpandexFields.CopyNumber, copyNumber))
@@ -48,31 +52,23 @@ object Queries {
       case _ => byDatasetIdQuery(datasetId)
     }
 
-  def byFieldValueAutocompleteQuery(fieldValue: Option[String]): QueryBuilder =
-    fieldValue match {
+  def byColumnValueAutocompleteQuery(columnValue: Option[String]): QueryBuilder =
+    columnValue match {
       case Some(value) => matchQuery(SpandexFields.ValueAutocomplete, value)
       case None => matchAllQuery()
     }
 
-  def byFieldValueAutocompleteAndCompositeIdQuery(fieldValue: Option[String], column: ColumnMap): QueryBuilder =
+  def byColumnValueAutocompleteAndCompositeIdQuery(columnValue: Option[String], column: ColumnMap): BoolQueryBuilder =
     boolQuery()
       .filter(byCompositeIdQuery(column))
-      .must(byFieldValueAutocompleteQuery(fieldValue))
+      .must(byColumnValueAutocompleteQuery(columnValue))
 
-  def fieldValueTermsAggregation(
-      size: Int,
-      aggKey: String = "values",
-      orderByScore: Boolean = false)
-    : AggregationBuilder = {
-
-    val termsAgg = terms(aggKey).field(SpandexFields.Value).size(size)
-
-    if (orderByScore) {
-      termsAgg.subAggregation(
-        max("max_score").script(new Script("_score"))
-      ).order(Terms.Order.aggregation("max_score.value", false))
-    } else {
-      termsAgg.order(Terms.Order.count(false))
-    }
+  def scoreByCountQuery(query: QueryBuilder): FunctionScoreQueryBuilder = {
+    val script = new Script(ScriptType.INLINE, "painless", "doc['count'].value", Map.empty[String, Object].asJava)
+    val fn = new FilterFunctionBuilder(ScoreFunctionBuilders.scriptFunction(script))
+    functionScoreQuery(query, Array(fn)).boostMode(CombineFunction.REPLACE)
   }
+
+  def nonPositiveCountColumnValuesByCopyNumberQuery(datasetId: String, copyNumber: Long): BoolQueryBuilder =
+    byCopyNumberQuery(datasetId, copyNumber).filter(rangeQuery(SpandexFields.Count).lte(0))
 }

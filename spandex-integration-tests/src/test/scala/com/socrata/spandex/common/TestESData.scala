@@ -20,38 +20,37 @@ trait TestESData {
 
   def makeRowData(col: Long, row: Long): String = s"data column $col row $row"
 
-  def rows(col: ColumnMap): Seq[FieldValue] =
-    (1 to 5).map(row =>
-      FieldValue(col.datasetId, col.copyNumber, col.systemColumnId, row, makeRowData(col.systemColumnId, row))
+  def rows(col: ColumnMap): Seq[ColumnValue] =
+    (1 to 5).map(rowId =>
+      ColumnValue(
+        col.datasetId, col.copyNumber, col.systemColumnId, makeRowData(col.systemColumnId, rowId.toLong), 1L)
     )
 
-  def client: SpandexElasticSearchClient
+  def client: TestESClient
 
   def bootstrapData(): Unit = {
     // Create 2 datasets with 3 copies each:
     // - an old snapshot copy
     // - the most recent published copy
     // - a working copy
-    datasets.map { ds =>
-      copies(ds).map { copy =>
+    datasets.foreach { ds =>
+      copies(ds).foreach { copy =>
         client.putDatasetCopy(ds, copy.copyNumber, copy.version, copy.stage, refresh = true)
 
-        columns(ds, copy).map { col =>
+        columns(ds, copy).foreach { col =>
           client.putColumnMap(
             ColumnMap(ds, copy.copyNumber, col.systemColumnId, col.userColumnId),
             refresh = true
           )
 
-          rows(col).map(doc =>
-            client.indexFieldValue(doc, refresh = true)
-          )
+          rows(col).foreach(client.indexColumnValue)
         }
       }
     }
   }
 
   def removeBootstrapData(): Unit = {
-    datasets.foreach(d => client.deleteFieldValuesByDataset(d, false))
+    datasets.foreach(d => client.deleteColumnValuesByDataset(d, false))
     datasets.foreach(d => client.deleteColumnMapsByDataset(d, false))
     datasets.foreach(d => client.deleteDatasetCopiesByDataset(d, false))
     client.refresh()

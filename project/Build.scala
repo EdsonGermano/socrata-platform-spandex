@@ -9,7 +9,7 @@ import sbtbuildinfo.BuildInfoKeys.buildInfoPackage
 import sbtbuildinfo.BuildInfoPlugin
 import scoverage.ScoverageSbtPlugin.ScoverageKeys.coverageExcludedPackages
 import sbtassembly.AssemblyKeys._
-import sbtassembly.MergeStrategy
+import sbtassembly.{AssemblyPlugin, MergeStrategy}
 
 
 object SpandexBuild extends Build {
@@ -19,6 +19,7 @@ object SpandexBuild extends Build {
   val dependenciesSnippet = SettingKey[xml.NodeSeq]("dependencies-snippet")
 
   lazy val commonSettings = Seq(
+    scalaVersion := "2.10.5",
     fork in Test := true,
     testOptions in Test += Tests.Argument("-oF"),
     resolvers ++= Deps.resolverList,
@@ -32,27 +33,30 @@ object SpandexBuild extends Build {
     },
     assemblyMergeStrategy in assembly := {
       case "META-INF/io.netty.versions.properties" => MergeStrategy.last
+      case "application.conf" => MergeStrategy.last
       case other => MergeStrategy.defaultMergeStrategy(other)
-    }
+    },
+    // Make sure the "configs" dir is on the runtime classpaths so application.conf can be found.
+    fullClasspath in Runtime <+= baseDirectory map { d => Attributed.blank(d.getParentFile / "configs") },
+    fullClasspath in Test <+= baseDirectory map { d => Attributed.blank(d.getParentFile / "configs") }
   )
 
   lazy val build = Project(
     "spandex",
     file("."),
     settings = commonSettings
-  ).aggregate(spandexCommon, spandexHttp, spandexSecondary)
-    .dependsOn(spandexCommon, spandexHttp, spandexSecondary)
+  ).aggregate(spandexCommon, spandexHttp, spandexSecondary, spandexDataLoader, spandexIntegrationTests)
+    .dependsOn(spandexCommon, spandexHttp, spandexSecondary, spandexDataLoader, spandexIntegrationTests)
 
-  lazy val spandexCommon = Project (
+  lazy val spandexCommon = Project(
     "spandex-common",
     file("./spandex-common/"),
     settings = commonSettings ++ Seq(
-      libraryDependencies ++= Deps.socrata ++ Deps.test ++ Deps.common ++ Deps.secondaryFiltered,
-      fullClasspath in Runtime += Attributed.blank(baseDirectory.value / ".." / "esconfigs")
+      libraryDependencies ++= Deps.socrata ++ Deps.test ++ Deps.common ++ Deps.secondaryFiltered
     )
   ).disablePlugins(JmhPlugin)
 
-  lazy val spandexHttp = Project (
+  lazy val spandexHttp = Project(
     "spandex-http",
     file("./spandex-http/"),
     settings = commonSettings ++ ScalatraPlugin.scalatraWithJRebel ++ scalateSettings ++ Seq(
@@ -87,7 +91,7 @@ object SpandexBuild extends Build {
     .disablePlugins(JmhPlugin)
     .enablePlugins(BuildInfoPlugin)
 
-  lazy val spandexSecondary = Project (
+  lazy val spandexSecondary = Project(
     "spandex-secondary",
     file("./spandex-secondary/"),
     settings = commonSettings ++ Seq(
@@ -97,6 +101,31 @@ object SpandexBuild extends Build {
     )
   ).dependsOn(spandexCommon % "compile;test->test")
     .disablePlugins(JmhPlugin)
+
+  lazy val spandexDataLoader = Project(
+    "spandex-data-loader",
+    file("./spandex-data-loader/"),
+    settings = commonSettings ++ Seq(
+      libraryDependencies ++= Deps.socrata ++ Deps.common ++ Deps.dataLoader,
+      buildInfoPackage := "com.socrata.spandex.data",
+      mainClass in assembly := Some("com.socrata.spandex.data.Loader")
+    )
+  ).dependsOn(spandexCommon % "compile")
+    .enablePlugins(BuildInfoPlugin)
+
+  lazy val spandexIntegrationTests = Project(
+    "spandex-integration-tests",
+    file("./spandex-integration-tests/"),
+    settings = commonSettings ++ Seq(
+      libraryDependencies ++= Deps.socrata ++ Deps.test ++ Deps.common ++ Deps.secondary,
+      fullClasspath in Runtime <+= baseDirectory map { d => Attributed.blank(d / "config") }
+    )
+  ).dependsOn(
+    spandexCommon % "compile;test->test",
+    spandexHttp % "compile;test->test",
+    spandexSecondary % "compile;test->test",
+    spandexDataLoader % "compile;test->test"
+  ).disablePlugins(JmhPlugin)
 
   lazy val gitSha = Process(Seq("git", "describe", "--always", "--dirty", "--long", "--abbrev=10")).!!.stripLineEnd
 }
@@ -118,6 +147,7 @@ object Deps {
       excludeAll(ExclusionRule(organization = "com.rojoma"),
                  ExclusionRule(organization = "commons-io"))
   )
+
   lazy val http = Seq(
     "org.scalatra" %% "scalatra" % ScalatraVersion,
     "org.scalatra" %% "scalatra-scalate" % ScalatraVersion,
@@ -126,12 +156,14 @@ object Deps {
     "org.eclipse.jetty" % "jetty-webapp" % JettyVersion % "container;compile",
     "org.eclipse.jetty" % "jetty-plus" % JettyVersion % "container"
   )
+
   lazy val test = Seq(
     "org.scalatra" %% "scalatra-specs2" % ScalatraVersion % "test",
     "org.scalatra" %% "scalatra-scalatest" % ScalatraVersion % "test",
     "org.apache.logging.log4j" % "log4j-api" % "2.7",
     "org.apache.logging.log4j" % "log4j-core" % "2.7"
   )
+
   lazy val common = Seq(
     "javax.servlet" % "javax.servlet-api" % "3.1.0",
     "com.typesafe" % "config" % "1.2.1",
@@ -140,10 +172,17 @@ object Deps {
     "org.elasticsearch" % "elasticsearch" % "5.4.1",
     "org.elasticsearch.client" % "transport" % "5.4.1"
   )
+
   lazy val secondary = Seq(
     "com.socrata" %% "secondarylib" % "3.4.10"
   )
+
+  lazy val dataLoader = Seq(
+    "com.fasterxml.jackson.dataformat" % "jackson-dataformat-csv" % "2.8.8",
+    "com.github.scopt" %% "scopt" % "3.7.0"
+  )
+
   lazy val secondaryFiltered =
     secondary.map(_.exclude("org.slf4j", "slf4j-log4j12")
-                   .excludeAll(ExclusionRule(organization = "com.rojoma")))
+                    .excludeAll(ExclusionRule(organization = "com.rojoma")))
 }

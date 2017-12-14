@@ -2,15 +2,8 @@ package com.socrata.spandex.http
 
 import com.rojoma.json.v3.util.AutomaticJsonCodecBuilder
 import com.typesafe.scalalogging.slf4j.Logging
-import com.socrata.spandex.common.client.BucketKeyVal
 
-import com.socrata.spandex.common.client.{FieldValue, SearchResults}
-
-import com.rojoma.json.v3.util.AutomaticJsonCodecBuilder
-import com.typesafe.scalalogging.slf4j.Logging
-import com.socrata.spandex.common.client.BucketKeyVal
-
-import com.socrata.spandex.common.client.{FieldValue, SearchResults, SpandexFields}
+import com.socrata.spandex.common.client.{ColumnValue, ScoredResult, SearchResults}
 
 case class SpandexOption(text: String, score: Option[Float])
 
@@ -23,10 +16,10 @@ case class SpandexResult(options: Seq[SpandexOption])
 object SpandexResult extends Logging {
   implicit val jCodec = AutomaticJsonCodecBuilder[SpandexResult]
 
-  def apply(results: SearchResults[FieldValue]): SpandexResult =
+  def apply(results: SearchResults[ColumnValue]): SpandexResult =
     SpandexResult(
-      results.aggs.map { case BucketKeyVal(key, value) =>
-        SpandexOption(key, Some(value.toFloat))
+      results.thisPage.map { case ScoredResult(ColumnValue(_, _, _, value, _), score) =>
+        SpandexOption(value, Some(score))
       }
     )
 

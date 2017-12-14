@@ -5,27 +5,47 @@ import java.io.File
 import com.typesafe.config.{Config, ConfigFactory}
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike, Matchers}
 
+import com.socrata.datacoordinator.secondary.LifecycleStage
 import com.socrata.spandex.common.client._
 
-import org.scalatest.Ignore
+class SuggestionsSpec extends FunSuiteLike with Matchers with BeforeAndAfterAll {
+  val className = getClass.getSimpleName.toLowerCase
 
-@Ignore
-class SuggestionsSpec extends FunSuiteLike with Matchers with AnalyzerTest with BeforeAndAfterAll {
-  // NOTE: these tests should be moved out into separate integration test suite
-  override protected def beforeAll(): Unit = analyzerBeforeAll()
-  override protected def afterAll(): Unit = analyzerAfterAll()
+  protected lazy val client = new TestESClient(getClass.getSimpleName.toLowerCase)
 
-  // relocated from SpandexElasticSearchClientSpec
+  override def beforeAll(): Unit = {
+    SpandexElasticSearchClient.ensureIndex(getClass.getSimpleName.toLowerCase, client)
+  }
+
+  override def afterAll(): Unit = {
+    client.deleteIndex()
+    client.close()
+  }
+
+  val ds = "ds.one"
+  val copy = DatasetCopy(ds, 1, 42, LifecycleStage.Published)
+  val col = ColumnMap(copy.datasetId, copy.copyNumber, 2, "column2")
+
+  def index(value: String, count: Long = 1): Unit =
+    client.indexColumnValues(
+      List(ColumnValue(col.datasetId, col.copyNumber, col.systemColumnId, value, count)),
+      refresh = true
+    )
+
+  def suggest(query: String): List[String] = {
+    val response = client.suggest(col, 20, query)
+    response.thisPage.map {
+      case ScoredResult(ColumnValue(_, _, _, value, _), _) => value
+    }.toList
+  }
+
   test("suggest is case insensitive and supports numbers and symbols") {
-    val fool = FieldValue(col.datasetId, col.copyNumber, col.systemColumnId, 42L, "fool")
-    val food = FieldValue(col.datasetId, col.copyNumber, col.systemColumnId, 43L, "FOOD")
-    val date = FieldValue(col.datasetId, col.copyNumber, col.systemColumnId, 44L, "04/2014")
-    val sym  = FieldValue(col.datasetId, col.copyNumber, col.systemColumnId, 45L, "@giraffe")
+    val fool = ColumnValue(col.datasetId, col.copyNumber, col.systemColumnId, "fool", 1)
+    val food = ColumnValue(col.datasetId, col.copyNumber, col.systemColumnId, "FOOD", 1)
+    val date = ColumnValue(col.datasetId, col.copyNumber, col.systemColumnId, "04/2014", 1)
+    val sym  = ColumnValue(col.datasetId, col.copyNumber, col.systemColumnId, "@giraffe", 1)
 
-    index(fool)
-    index(food)
-    index(date)
-    index(sym)
+    client.indexColumnValues(List(fool, food, date, sym), refresh = true)
 
     val suggestions = suggest("foo")
     suggestions.length should be(2)
@@ -69,17 +89,6 @@ class SuggestionsSpec extends FunSuiteLike with Matchers with AnalyzerTest with 
     suggest("former president abraham lincoln") should contain(expectedValue)
   }
 
-  test("suggest does not tokenize an email address into its constituent parts") {
-    val expectedValue = "we.are+awesome@socrata.com"
-    index(expectedValue)
-    //suggest("we.are+awesome@socrata.com") should contain(expectedValue)
-    //suggest("we.are+awesome") should contain(expectedValue)
-    // suggest("are") should be('empty)
-    // suggest("awesome") should be('empty)
-    // suggest("socrata") should be('empty)
-    // suggest("com") should be('empty)    
-  }
-
   test("suggest returns indexed field values that are URLs when the query is any of their consitituent terms") {
     val expectedValue = "https://lucene.rocks/completion-suggester.html"
     index(expectedValue)
@@ -107,10 +116,6 @@ class SuggestionsSpec extends FunSuiteLike with Matchers with AnalyzerTest with 
     suggest(search) should contain(expectedValue)
   }
 
-  // NOTE: using the edge ngram tokenizer does not allow for custom tokenization rules;
-  // provided that we use an appropriate tokenizer at search time (ie. one that also
-  // breaks on ampersands), then we will get the expected results, but in the case of
-  // strings like 'AT&T' we'll potentially get a lot more than what we want
   test("suggest returns the expected field values when searching for terms with ampersands like AT&T") {
     val expectedValue = "AT&T Mobility"
     val search = "AT&T"
@@ -131,5 +136,14 @@ class SuggestionsSpec extends FunSuiteLike with Matchers with AnalyzerTest with 
     val value = "The quick and the dead"
     index(value)
     suggest(".") should be('empty)
+  }
+
+  test("suggest returns values ordered by count when the suggest query is an empty string") {
+    val foo = ColumnValue(col.datasetId, col.copyNumber, col.systemColumnId, "foo", 1)
+    val bar = ColumnValue(col.datasetId, col.copyNumber, col.systemColumnId, "bar", 2)
+    val baz = ColumnValue(col.datasetId, col.copyNumber, col.systemColumnId, "baz", 3)
+    client.indexColumnValues(List(foo, bar, baz), refresh = true)
+
+    suggest("") should contain inOrder ("baz", "bar", "foo")
   }
 }

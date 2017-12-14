@@ -19,8 +19,9 @@ class SpandexServlet(conf: SpandexConfig,
   val version = BuildInfo.toJson
 
   def columnMap(datasetId: String, copyNum: Long, userColumnId: String): ColumnMap =
-    client.columnMap(datasetId, copyNum, userColumnId).getOrElse(halt(
+    client.fetchColumnMap(datasetId, copyNum, userColumnId).getOrElse(halt(
       HttpStatus.SC_NOT_FOUND, JsonUtil.renderJson(SpandexError("Column not found", Some(userColumnId)))))
+
   def urlDecode(s: String): String = java.net.URLDecoder.decode(s, EncodingUtf8)
 
   healthCheck("alive") {true}
@@ -98,8 +99,9 @@ class SpandexServlet(conf: SpandexConfig,
    * @param paramUserColumnId the column identifier for the column to search
    * @param paramText the text to search for
    * @return `SpandexResult`
+   *
+   * @example /suggest/alpha.1234/latest/abcd-1234 where abcd-1234 is the column 4x4
    */
-  // looks like: /suggest/alpha.1234/latest/abcd-1234 where abcd-1234 is the column 4x4
   get(s"/$routeSuggest/:$paramDatasetId/:$paramStageInfo/:$paramUserColumnId") {
     params.get(paramText) match {
       case None =>
@@ -117,7 +119,7 @@ class SpandexServlet(conf: SpandexConfig,
     }
   }
 
-  /* Delete all artifacts associated with a particular dataset from Spandex.
+  /* Delete all records associated with a particular dataset from Spandex.
    *
    * @param paramDatasetId the dataset system ID for the dataset to delete
    * @return `Map[String, Int]` if successful, indicating how many of each type was deleted from the index

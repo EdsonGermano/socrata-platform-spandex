@@ -9,39 +9,30 @@ import com.socrata.datacoordinator.util.collection.ColumnIdMap
 import com.socrata.soql.environment.ColumnName
 import com.socrata.soql.types._
 import com.socrata.spandex.common._
-import com.socrata.spandex.common.client.{ColumnMap, DatasetCopy, FieldValue, TestESClient}
+import com.socrata.spandex.common.client.{ColumnMap, ColumnValue, DatasetCopy}
 import com.socrata.spandex.common.client.SpandexElasticSearchClient
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FunSuiteLike, Matchers}
 
-class TestSpandexSecondary(config: ElasticSearchConfig, testClient: TestESClient) extends SpandexSecondaryLike {
-  val client = testClient
-  val index = config.index
-  val batchSize = config.dataCopyBatchSize
+class TestSpandexSecondary(
+    override val client: SpandexElasticSearchClient,
+    override val index: String,
+    override val batchSize: Int)
+  extends SpandexSecondaryLike {
 
   def shutdown(): Unit = client.close()
 }
 
 // scalastyle:off
-class SpandexSecondaryLikeSpec extends FunSuiteLike with Matchers with TestESData with BeforeAndAfterEach with BeforeAndAfterAll {
-  val config = new SpandexConfig
+class SpandexSecondaryLikeSpec extends FunSuiteLike
+  with Matchers
+  with SpandexIntegrationTest {
 
-  val indexName = getClass.getSimpleName.toLowerCase
-  val testClient = new TestESClient(indexName)
-  val secondary = new TestSpandexSecondary(config.es, testClient)
-
-  def client = secondary.client
-
-  override protected def beforeAll(): Unit =
-    SpandexElasticSearchClient.ensureIndex(config.es.index, client)
-
-  override def beforeEach(): Unit = bootstrapData()
-
-  override def afterEach(): Unit = removeBootstrapData()
+  val secondary = new TestSpandexSecondary(client.client, indexName, client.client.dataCopyBatchSize)
 
   test("drop dataset") {
-    client.searchFieldValuesByDataset(datasets(0)).totalHits should be (45)
-    client.searchFieldValuesByDataset(datasets(1)).totalHits should be (45)
+    client.searchColumnValuesByDataset(datasets(0)).totalHits should be (45)
+    client.searchColumnValuesByDataset(datasets(1)).totalHits should be (45)
     client.searchCopiesByDataset(datasets(0)).totalHits should be (3)
     client.searchCopiesByDataset(datasets(1)).totalHits should be (3)
     client.searchColumnMapsByDataset(datasets(0)).totalHits should be (9)
@@ -49,8 +40,8 @@ class SpandexSecondaryLikeSpec extends FunSuiteLike with Matchers with TestESDat
 
     secondary.dropDataset(datasets(0), None)
 
-    client.searchFieldValuesByDataset(datasets(0)).totalHits should be (0)
-    client.searchFieldValuesByDataset(datasets(1)).totalHits should be (45)
+    client.searchColumnValuesByDataset(datasets(0)).totalHits should be (0)
+    client.searchColumnValuesByDataset(datasets(1)).totalHits should be (45)
     client.searchCopiesByDataset(datasets(0)).totalHits should be (0)
     client.searchCopiesByDataset(datasets(1)).totalHits should be (3)
     client.searchColumnMapsByDataset(datasets(0)).totalHits should be (0)
@@ -58,8 +49,8 @@ class SpandexSecondaryLikeSpec extends FunSuiteLike with Matchers with TestESDat
   }
 
   test("drop copy") {
-    client.searchFieldValuesByCopyNumber(datasets(0), 1).totalHits should be (15)
-    client.searchFieldValuesByCopyNumber(datasets(0), 2).totalHits should be (15)
+    client.searchColumnValuesByCopyNumber(datasets(0), 1).totalHits should be (15)
+    client.searchColumnValuesByCopyNumber(datasets(0), 2).totalHits should be (15)
     client.datasetCopy(datasets(0), 1) should be ('defined)
     client.datasetCopy(datasets(0), 2) should be ('defined)
     client.searchColumnMapsByCopyNumber(datasets(0), 1).totalHits should be (3)
@@ -69,8 +60,8 @@ class SpandexSecondaryLikeSpec extends FunSuiteLike with Matchers with TestESDat
     val copyInfo = CopyInfo(new CopyId(100), 2, LifecycleStage.Published, 10, DateTime.now)
     secondary.dropCopy(datasetInfo, copyInfo, None, isLatestCopy = true)
 
-    client.searchFieldValuesByCopyNumber(datasets(0), 1).totalHits should be (15)
-    client.searchFieldValuesByCopyNumber(datasets(0), 2).totalHits should be (0)
+    client.searchColumnValuesByCopyNumber(datasets(0), 1).totalHits should be (15)
+    client.searchColumnValuesByCopyNumber(datasets(0), 2).totalHits should be (0)
     client.datasetCopy(datasets(0), 1) should be ('defined)
     client.datasetCopy(datasets(0), 2) should not be 'defined
     client.searchColumnMapsByCopyNumber(datasets(0), 1).totalHits should be (3)
@@ -86,13 +77,13 @@ class SpandexSecondaryLikeSpec extends FunSuiteLike with Matchers with TestESDat
 
   test("resync") {
     // Add some stale data related to this dataset, which should be cleaned up in the resync
-    client.indexFieldValue(FieldValue("zoo-animals", 5, 3, 6, "marmot"), refresh = true)
+    client.indexColumnValue(ColumnValue("zoo-animals", 5, 3, "marmot", 1))
     client.putColumnMap(ColumnMap("zoo-animals", 5, 3, "species"), refresh = true)
     client.putDatasetCopy("zoo-animals", 5, 5, LifecycleStage.Unpublished, refresh = true)
 
     client.searchCopiesByDataset("zoo-animals").totalHits should be (1)
     client.searchColumnMapsByDataset("zoo-animals").totalHits should be (1)
-    client.searchFieldValuesByDataset("zoo-animals").totalHits should be (1)
+    client.searchColumnValuesByDataset("zoo-animals").totalHits should be (1)
 
     val datasetInfo = DatasetInfo("zoo-animals", "en-US", Array.empty, Some("zoo-animals"))
     val copyInfo = CopyInfo(new CopyId(100), 5, LifecycleStage.Published, 15, DateTime.now)
@@ -124,23 +115,23 @@ class SpandexSecondaryLikeSpec extends FunSuiteLike with Matchers with TestESDat
 
     val copies = client.searchCopiesByDataset("zoo-animals")
     copies.totalHits should be (1)
-    copies.thisPage(0) should be (DatasetCopy("zoo-animals",
-                                              copyInfo.copyNumber,
-                                              copyInfo.dataVersion,
-                                              copyInfo.lifecycleStage))
+    copies.thisPage.map(_.result).head should be (
+      DatasetCopy("zoo-animals", copyInfo.copyNumber, copyInfo.dataVersion, copyInfo.lifecycleStage))
 
     client.searchColumnMapsByDataset("zoo-animals").totalHits should be (2)
-    val columnMaps = client.searchColumnMapsByDataset("zoo-animals").thisPage.sortBy(_.systemColumnId)
+    val columnMaps = client.searchColumnMapsByDataset("zoo-animals").thisPage.map(_.result).sortBy(_.systemColumnId)
     columnMaps(0) should be (ColumnMap("zoo-animals", copyInfo.copyNumber, 2, "animal"))
     columnMaps(1) should be (ColumnMap("zoo-animals", copyInfo.copyNumber, 3, "class"))
 
-    client.searchFieldValuesByDataset("zoo-animals").totalHits should be (6)
-    val fieldValues = client.searchFieldValuesByDataset("zoo-animals").thisPage.sortBy(fv => (fv.rowId, fv.columnId))
-    fieldValues(0) should be (FieldValue("zoo-animals", copyInfo.copyNumber, 2, 10, "giraffe"))
-    fieldValues(1) should be (FieldValue("zoo-animals", copyInfo.copyNumber, 3, 10, "mammalia"))
-    fieldValues(2) should be (FieldValue("zoo-animals", copyInfo.copyNumber, 2, 12, "axolotl"))
-    fieldValues(3) should be (FieldValue("zoo-animals", copyInfo.copyNumber, 3, 12, "amphibia"))
-    fieldValues(4) should be (FieldValue("zoo-animals", copyInfo.copyNumber, 2, 14, "ostrich"))
-    fieldValues(5) should be (FieldValue("zoo-animals", copyInfo.copyNumber, 3, 14, "avia"))
+    client.searchColumnValuesByDataset("zoo-animals").totalHits should be (6)
+    val columnValues = client.searchColumnValuesByDataset("zoo-animals").thisPage.map(_.result).sortBy(cv => (cv.columnId, cv.value))
+    columnValues should contain theSameElementsInOrderAs(
+      List(
+        ColumnValue("zoo-animals", copyInfo.copyNumber, 2, "axolotl", 1),
+        ColumnValue("zoo-animals", copyInfo.copyNumber, 2, "giraffe", 1),
+        ColumnValue("zoo-animals", copyInfo.copyNumber, 2, "ostrich", 1),
+        ColumnValue("zoo-animals", copyInfo.copyNumber, 3, "amphibia", 1),
+        ColumnValue("zoo-animals", copyInfo.copyNumber, 3, "avia", 1),
+        ColumnValue("zoo-animals", copyInfo.copyNumber, 3, "mammalia", 1)))
   }
 }

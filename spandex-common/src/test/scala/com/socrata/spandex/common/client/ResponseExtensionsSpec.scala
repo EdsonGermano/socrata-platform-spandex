@@ -64,7 +64,7 @@ class ResponseExtensionsSpec extends FunSuiteLike
     bulkResponse.deletions shouldBe empty
   }
 
-  test("JSON serialzation of dataset copies, column maps, and field values includes composite fields") {
+  test("JSON serialzation of dataset copies, column maps, and column values includes composite fields") {
     val datasetId = "ds.one"
     val datasetCopy = DatasetCopy(datasetId, 1, 42, LifecycleStage.Published)
     var expected = j"""{"dataset_id":"ds.one","copy_number":1,"version":42,"stage":"Published"}"""
@@ -74,8 +74,8 @@ class ResponseExtensionsSpec extends FunSuiteLike
     expected = j"""{"dataset_id":"ds.one","copy_number":1,"system_column_id":2,"user_column_id":"column2"}"""
     JsonEncode.toJValue(columnMap) should be(expected)
 
-    val fieldValue = FieldValue(columnMap.datasetId, columnMap.copyNumber, columnMap.systemColumnId, 42, "foo")
-    expected = j"""{"column_id":2,"composite_id":"ds.one|1|2","copy_number":1,"dataset_id":"ds.one","row_id":42,"value":"foo"}"""
-    JsonEncode.toJValue(fieldValue) should be(expected)
+    val columnValue = ColumnValue(columnMap.datasetId, columnMap.copyNumber, columnMap.systemColumnId, "foo", 1L)
+    expected = j"""{"column_id":2,"composite_id":"ds.one|1|2","copy_number":1,"dataset_id":"ds.one","value":"foo","count": 1}"""
+    JsonEncode.toJValue(columnValue) should be(expected)
   }
 }

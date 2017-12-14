@@ -13,15 +13,14 @@
     "copy_number": {
       "type": "long"
     },
+    "count": {
+      "type": "long"
+    },
     "dataset_id": {
       "type": "keyword"
     },
-    "row_id": {
-      "type": "long"
-    },
     "value": {
       "type": "keyword",
-      "eager_global_ordinals": true,
       "fields": {
         "autocomplete": {
           "type": "text",
