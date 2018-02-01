@@ -130,7 +130,7 @@ object Deps {
     "org.elasticsearch" % "elasticsearch" % "1.7.2"
   )
   lazy val secondary = Seq(
-    "com.socrata" %% "secondarylib" % "3.3.5"
+    "com.socrata" %% "secondarylib" % "3.4.10"
   )
   lazy val secondaryFiltered =
     secondary.map(_.exclude("org.slf4j", "slf4j-log4j12")

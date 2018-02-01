@@ -48,31 +48,27 @@ es-start
 ## Setup spandex-secondary
 spandex-secondary is a Soda Server secondary service that replicates datasets to Elastic Search so that they work with autocomplete (Spandex-Http). Below are the steps to get the secondary running on your local machine.
 
-### Build the secondary artifact
+### Run spandex-secondary (secondary-watcher-spandex)
+This is how to run spandex-secondary:
 ```sh
-cd $YOUR_SPANDEX_REPO
-sbt clean assembly
-ln -s $PWD/spandex-secondary/target/scala-2.10/spandex-secondary-assembly-*.jar ~/secondary-stores
+$ cd $YOUR_SPANDEX_REPO
+$ sbt -Dconfig.file=configs/application.conf spandex-secondary/run
 ```
 
-### Register Spandex secondary in truth DB
+### Register Spandex secondary in truth DB and restart Data Coordinator
+
 ```sh
 psql -U blist -d datacoordinator -c "INSERT INTO secondary_stores_config (store_id, next_run_time, interval_in_seconds) values ('spandex', now(), 5);"
 ```
 
-### Configuration changes
-* Ensure you are using the most up-to-date version of `soda2.conf` as per the onramp documentation in the `docs` repo.
-* Alternatively, you can append the entire contents of [reference.conf](https://github.com/socrata/spandex/blob/master/spandex-common/src/main/resources/reference.conf) to your `soda2.conf` file.
+Data Coordinator will need to be restarted with a configuration naming spandex as a secondary group (but this should
+already [be the case](https://github.com/socrata-platform/data-coordinator/blob/master/configs/sample-data-coordinator.conf#L25)).
 
-### Service restarts
-Restart data coordinator and secondary watcher.
-If all went well, the secondary watcher log should be free of errors and the last few lines should look something like this:
-```sh
-[Worker 1 for secondary spandex] INFO SecondaryWatcher 2015-03-31 10:51:06,661 update-next-runtime: 1ms; [["store-id","spandex"]]
-[Worker 2 for secondary pg] INFO SecondaryWatcher 2015-03-31 10:51:06,661 update-next-runtime: 1ms; [["store-id","pg"]]
-[Worker 2 for secondary spandex] INFO SecondaryWatcher 2015-03-31 10:51:06,664 update-next-runtime: 30ms; [["store-id","spandex"]]
-[Worker 1 for secondary pg] INFO SecondaryWatcher 2015-03-31 10:51:06,664 update-next-runtime: 33ms; [["store-id","pg"]]
-```
+### Configuration
+
+ * Configuration for development setup is maintained in [configs/application.conf](https://github.com/socrata/spandex/blob/master/configs/application.conf).
+ * You can create overrides to this in the .gitignored file `configs/spandex.conf`.
+
 ### Replicating a specific dataset to Spandex
 Execute the following query against Soda Fountain:
 `curl -X POST http://localhost:6010/dataset-copy/_{4x4}/spandex`
@@ -81,7 +77,7 @@ Execute the following query against Soda Fountain:
 spandex-http returns autocomplete suggestions for a given dataset, column and prefix. This is how you run spandex-http:
 ```sh
 $ cd $YOUR_SPANDEX_REPO
-$ sbt spandex-http/run
+$ sbt -Dconfig.file=configs/application.conf spandex-http/run
 ```
 
 ## Smoke tests

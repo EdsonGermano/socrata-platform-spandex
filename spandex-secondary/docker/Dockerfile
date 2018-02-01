@@ -6,6 +6,7 @@ ENV SERVER_CONFIG secondary-watcher.conf
 
 # general secondary-watcher defaults
 ENV TRUTH_CLUSTER alpha
+ENV TRUTH_CLUSTER_COLLOCATION_GROUP [alpha]
 ENV ENABLE_GRAPHITE false
 ENV GRAPHITE_HOST 0.0.0.0
 ENV GRAPHITE_PORT 0

@@ -31,7 +31,9 @@ class DatasetLifecycleSimulation extends FunSuiteLike with Matchers {
     val dataset = DatasetInfo(
       internalName =  "my-so-called-lifecycle",
       localeName = "en-US",
-      obfuscationKey = Array.empty[Byte])
+      obfuscationKey = Array.empty[Byte],
+      resourceName = Some("my-so-called-lifecycle")
+    )
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // DATASET CREATION

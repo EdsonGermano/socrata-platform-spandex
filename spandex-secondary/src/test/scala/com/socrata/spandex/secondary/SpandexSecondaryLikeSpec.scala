@@ -60,7 +60,7 @@ class SpandexSecondaryLikeSpec extends FunSuiteLike with Matchers with TestESDat
     client.searchColumnMapsByCopyNumber(datasets(0), 1).totalHits should be (3)
     client.searchColumnMapsByCopyNumber(datasets(0), 2).totalHits should be (3)
 
-    val datasetInfo = DatasetInfo(datasets(0), "en-US", Array.empty)
+    val datasetInfo = DatasetInfo(datasets(0), "en-US", Array.empty, Some(datasets(0)))
     val copyInfo = CopyInfo(new CopyId(100), 2, LifecycleStage.Published, 10, DateTime.now)
     secondary.dropCopy(datasetInfo, copyInfo, None, isLatestCopy = true)
 
@@ -74,7 +74,7 @@ class SpandexSecondaryLikeSpec extends FunSuiteLike with Matchers with TestESDat
 
   test("drop future copy") {
     client.datasetCopy(datasets(0), 7) should not be 'defined
-    val datasetInfo = DatasetInfo(datasets(0), "en-US", Array.empty)
+    val datasetInfo = DatasetInfo(datasets(0), "en-US", Array.empty, Some(datasets(0)))
     val copyInfo = CopyInfo(new CopyId(200), 7, LifecycleStage.Published, 77, DateTime.now)
     secondary.dropCopy(datasetInfo, copyInfo, None, isLatestCopy = true)
   }
@@ -89,7 +89,7 @@ class SpandexSecondaryLikeSpec extends FunSuiteLike with Matchers with TestESDat
     client.searchColumnMapsByDataset("zoo-animals").totalHits should be (1)
     client.searchFieldValuesByDataset("zoo-animals").totalHits should be (1)
 
-    val datasetInfo = DatasetInfo("zoo-animals", "en-US", Array.empty)
+    val datasetInfo = DatasetInfo("zoo-animals", "en-US", Array.empty, Some("zoo-animals"))
     val copyInfo = CopyInfo(new CopyId(100), 5, LifecycleStage.Published, 15, DateTime.now)
     val schema = ColumnIdMap[ColumnInfo[SoQLType]](
       new ColumnId(1) -> ColumnInfo[SoQLType](new ColumnId(1), new UserColumnId(":id"), Some(ColumnName(":id")), SoQLID, true, false, false, None),

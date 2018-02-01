@@ -72,3 +72,5 @@ jrebel.lic
 
 spandex-http/docker/*.jar
 spandex-secondary/docker/*.jar
+
+configs/local.conf
